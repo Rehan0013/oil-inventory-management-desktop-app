@@ -2,8 +2,6 @@
 
 A comprehensive desktop application for managing oil inventory, billing, and employees. Built with Electron, React, and SQLite.
 
-![Oil Master Screenshot](path/to/screenshot.png) *Add a screenshot here if available*
-
 ## Features
 
 ### 📦 Inventory Management
