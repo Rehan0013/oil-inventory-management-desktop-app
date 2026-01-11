@@ -1,16 +1,88 @@
-# React + Vite
+# Oil Inventory Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive desktop application for managing oil inventory, billing, and employees. Built with Electron, React, and SQLite.
 
-Currently, two official plugins are available:
+![Oil Master Screenshot](path/to/screenshot.png) *Add a screenshot here if available*
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+### 📦 Inventory Management
+- **Product Catalog**: Add, edit, and update products with ease.
+- **Stock Management**: Track stock levels with visual indicators (Low/Out of Stock).
+- **Quick Add Stock**: Incrementally add stock to existing products.
+- **Search**: Fast product filtering.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 💰 Billing & Invoicing
+- **Point of Sale**: Quick billing interface with product search and cart.
+- **Professional Bills**: Generate A4-compatible bills for printing.
+- **Bill History**: View and reprint past transaction records.
+- **PDF Export**: Save bills as PDF files.
 
-## Expanding the ESLint configuration
+### 👥 User & Employee Management
+- **Role-Based Access**:
+  - **Owner**: Full access to all features including Employee/User management and Deletion.
+  - **Worker**: Access to Billing and Inventory (Add/Edit/Stock) but restricted from deleting items.
+- **Employee Tracking**: Manage staff details.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 🎨 Modern UI/UX
+- **Dark/Light Mode**: Fully responsive theme support.
+- **Dashboard**: Real-time statistics on sales, revenue, and stock.
+
+## Tech Stack
+
+- **Frontend**: React, Vite, Tailwind CSS
+- **Backend/Shell**: Electron
+- **Database**: SQLite (better-sqlite3)
+- **Icons**: Lucide React
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v18 or higher recommended)
+- Python (for building `better-sqlite3` native modules)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd oil-inventory
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Run the application in development mode:
+   ```bash
+   npm start
+   ```
+   This will run the Vite dev server and launch Electron.
+
+## Building for Production
+
+To create a distributable installer for your OS (macOS, Windows, or Linux):
+
+```bash
+npm run package
+```
+
+The artifacts (DMG, EXE, etc.) will be generated in the `release/` directory.
+
+### GitHub Actions
+This project includes a CI/CD workflow (`.github/workflows/electron-build.yml`) to automatically build and upload artifacts on push.
+
+## Project Structure
+
+- `electron/` - Main process and preload scripts.
+- `src/`
+  - `components/` - Reusable UI components (Sidebar, BillTemplate, etc.).
+  - `context/` - React Contexts (Auth, Theme, Toast).
+  - `pages/` - Application views (Dashboard, Billing, Inventory, etc.).
+  - `lib/` - Utilities.
+- `release/` - Output directory for builds.
+
+## License
+
+[Your License Here]
