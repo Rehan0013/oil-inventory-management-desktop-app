@@ -1,12 +1,9 @@
 name: Build Electron App
 
-# Trigger on push to any branch or tag
 on:
   push:
     branches:
-      - "**"
-    tags:
-      - "v*"
+      - master
   workflow_dispatch:
 
 jobs:
@@ -17,51 +14,67 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    # Expose GH_TOKEN to the job
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
-
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js (stable version for Electron)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: "npm"
+          node-version: 20
+          cache: npm
 
-      # 3️⃣ Setup Python for native module rebuilds (better-sqlite3)
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # 4️⃣ Install dependencies
       - name: Install dependencies
         run: npm ci
 
-      # Optional: debug check for GH_TOKEN
-      - name: Check GH_TOKEN
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "GH_TOKEN is NOT set"
-            exit 1
-          else
-            echo "GH_TOKEN is set"
-          fi
+      - name: Build Vite frontend
+        run: npm run build
 
-      # 5️⃣ Build & package Electron app
-      - name: Build Electron App
-        run: npm run package
+      # ---------------------------
+      # macOS BUILD
+      # ---------------------------
+      - name: Build Electron (macOS)
+        if: runner.os == 'macOS'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ GH_TOKEN is missing"
+            exit 1
+          fi
+          npx electron-builder --mac --publish never
 
-      # 6️⃣ Upload artifacts (.exe for Windows, .dmg for Mac)
-      - name: Upload build artifacts
+      # ---------------------------
+      # WINDOWS BUILD (PowerShell)
+      # ---------------------------
+      - name: Build Electron (Windows)
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        shell: powershell
+        run: |
+          if (-not $env:GH_TOKEN) {
+            Write-Error "GH_TOKEN is missing"
+            exit 1
+          }
+          npx electron-builder --win --publish never
+
+      # ---------------------------
+      # UPLOAD ARTIFACTS
+      # ---------------------------
+      - name: Upload macOS installer
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ runner.os }}-installer
-          path: release/
+          name: macOS-installer
+          path: |
+            release/*.dmg
+            release/*.zip
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            release/*.exe
