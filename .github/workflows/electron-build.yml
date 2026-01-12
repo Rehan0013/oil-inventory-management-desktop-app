@@ -2,8 +2,8 @@ name: Build Electron App
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -37,44 +37,13 @@ jobs:
         if: runner.os == 'macOS'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "❌ GH_TOKEN is missing"
-            exit 1
-          fi
-          npx electron-builder --mac --publish never
+        run: npx electron-builder --mac
 
       # ---------------------------
-      # WINDOWS BUILD (PowerShell)
+      # WINDOWS BUILD
       # ---------------------------
       - name: Build Electron (Windows)
         if: runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        shell: powershell
-        run: |
-          if (-not $env:GH_TOKEN) {
-            Write-Error "GH_TOKEN is missing"
-            exit 1
-          }
-          npx electron-builder --win --publish never
-
-      # ---------------------------
-      # UPLOAD ARTIFACTS
-      # ---------------------------
-      - name: Upload macOS installer
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macOS-installer
-          path: |
-            release/*.dmg
-            release/*.zip
-
-      - name: Upload Windows installer
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: |
-            release/*.exe
+        run: npx electron-builder --win
