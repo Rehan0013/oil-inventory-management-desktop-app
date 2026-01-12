@@ -1,12 +1,13 @@
 {
   "name": "oil-inventory-management",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "electron/main.cjs",
   "author": "Rehan Ali",
   "description": "Oil Inventory Management Desktop Application",
   "scripts": {
     "dev": "vite",
+    "postinstall": "electron-builder install-app-deps",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
