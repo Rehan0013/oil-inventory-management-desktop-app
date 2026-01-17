@@ -1,22 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, User, Filter, DollarSign, ChevronDown, ChevronUp, FileText, Eye, X, Printer } from 'lucide-react';
+import { Search, Calendar, User, Filter, DollarSign, ChevronDown, ChevronUp, FileText, Eye, X, Printer, IndianRupee } from 'lucide-react';
 import BillTemplate from '../components/BillTemplate';
+import Dropdown from '../components/Dropdown';
+import { BUSINESS_DETAILS } from '../config/business';
 
 const BillHistory = () => {
     const [bills, setBills] = useState([]);
     const [loading, setLoading] = useState(false);
     const [viewBill, setViewBill] = useState(null);
+    const [settings] = useState(BUSINESS_DETAILS);
 
     const [filters, setFilters] = useState({
         startDate: '',
         endDate: '',
+
         minPrice: '',
         maxPrice: '',
         sellerName: '',
-        customerName: ''
+        customerName: '',
+        paymentStatus: 'all' // all, paid, unpaid_partial
     });
 
     const [expandedBill, setExpandedBill] = useState(null);
+    const [showPayModal, setShowPayModal] = useState(false);
+    const [payBillData, setPayBillData] = useState(null);
+    const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentMode, setPaymentMode] = useState('Cash');
 
     useEffect(() => {
         loadBills();
@@ -44,12 +53,26 @@ const BillHistory = () => {
         loadBills();
     };
 
+    const paymentOptions = [
+        { label: 'All Payments', value: 'all' },
+        { label: 'Paid', value: 'Paid' },
+        { label: 'Unpaid / Partial', value: 'unpaid_partial' }
+    ];
+
     const toggleExpand = (id) => {
         setExpandedBill(expandedBill === id ? null : id);
     };
 
     const handlePrint = () => {
-        window.print();
+        document.body.classList.add("printing");
+
+        setTimeout(() => {
+            window.print();
+
+            setTimeout(() => {
+                document.body.classList.remove("printing");
+            }, 500);
+        }, 100);
     };
 
     return (
@@ -57,15 +80,19 @@ const BillHistory = () => {
 
             {/* Hidden Template for Printing the VIEWED bill */}
             <div className="print-only">
-                <BillTemplate bill={viewBill} />
+                <BillTemplate bill={viewBill} settings={settings} />
             </div>
 
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Bill History</h1>
 
             {/* Filters Section */}
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 mb-6 shadow-sm">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                    <div>
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 mb-6 shadow-sm">
+
+                {/* Filters Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                    {/* Date Range */}
+                    <div className="col-span-1 sm:col-span-2">
                         <label className="text-xs text-gray-500 mb-1 block">Date Range</label>
                         <div className="flex gap-2">
                             <input
@@ -73,45 +100,51 @@ const BillHistory = () => {
                                 name="startDate"
                                 value={filters.startDate}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                             <input
                                 type="date"
                                 name="endDate"
                                 value={filters.endDate}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                         </div>
                     </div>
+
+                    {/* Seller Name */}
                     <div>
                         <label className="text-xs text-gray-500 mb-1 block">Seller Name</label>
                         <div className="relative">
-                            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
                                 name="sellerName"
                                 placeholder="Search Seller"
                                 value={filters.sellerName}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                         </div>
                     </div>
+
+                    {/* Customer Name */}
                     <div>
                         <label className="text-xs text-gray-500 mb-1 block">Customer Name</label>
                         <div className="relative">
-                            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
                                 name="customerName"
                                 placeholder="Search Customer"
                                 value={filters.customerName}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                         </div>
                     </div>
+
+                    {/* Price Range */}
                     <div>
                         <label className="text-xs text-gray-500 mb-1 block">Price Range</label>
                         <div className="flex gap-2">
@@ -121,7 +154,7 @@ const BillHistory = () => {
                                 placeholder="Min"
                                 value={filters.minPrice}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                             <input
                                 type="number"
@@ -129,21 +162,39 @@ const BillHistory = () => {
                                 placeholder="Max"
                                 value={filters.maxPrice}
                                 onChange={handleFilterChange}
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm focus:border-blue-500 outline-none"
                             />
                         </div>
                     </div>
+
+                    {/* Payment Status */}
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Payment Status</label>
+                        <Dropdown
+                            options={paymentOptions}
+                            value={filters.paymentStatus}
+                            onChange={(val) =>
+                                setFilters({ ...filters, paymentStatus: val })
+                            }
+                            label="Status"
+                        />
+                    </div>
+
                 </div>
-                <div className="flex justify-end">
+
+                {/* Action Button */}
+                <div className="flex justify-end mt-5">
                     <button
                         onClick={applyFilters}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition active:scale-95 shadow-lg shadow-blue-500/30"
                     >
-                        <Filter size={16} />
+                        <Filter size={18} />
                         Apply Filters
                     </button>
                 </div>
+
             </div>
+
 
             {/* Content */}
             <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden flex flex-col">
@@ -206,6 +257,33 @@ const BillHistory = () => {
                                         <tr className="bg-gray-50/50 dark:bg-gray-800/20">
                                             <td colSpan="6" className="p-4">
                                                 <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+
+                                                    {/* Payment Details & Update */}
+                                                    <div className="flex justify-between items-start mb-4 border-b border-gray-100 dark:border-gray-800 pb-4">
+                                                        <div>
+                                                            <p className="text-sm text-gray-500">Payment Status: <span className={`font-bold ${bill.payment_status === 'Paid' ? 'text-green-600' : 'text-red-600'}`}>{bill.payment_status}</span></p>
+                                                            {bill.payment_status !== 'Paid' && (
+                                                                <>
+                                                                    <p className="text-sm text-gray-500">Paid: <span className="font-medium text-gray-900 dark:text-white">₹{bill.amount_paid || 0}</span></p>
+                                                                    <p className="text-sm text-gray-500">Due: <span className="font-medium text-red-600">₹{bill.balance_due || (bill.total_amount - (bill.amount_paid || 0))}</span></p>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {bill.payment_status !== 'Paid' && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPayBillData(bill);
+                                                                    setPaymentAmount(bill.balance_due || (bill.total_amount - (bill.amount_paid || 0)));
+                                                                    setPaymentMode('Cash');
+                                                                    setShowPayModal(true);
+                                                                }}
+                                                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors shadow-sm"
+                                                            >
+                                                                Update Payment
+                                                            </button>
+                                                        )}
+                                                    </div>
+
                                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Bill Items</h4>
                                                     <div className="space-y-2">
                                                         {bill.items && bill.items.map((item, idx) => (
@@ -215,6 +293,20 @@ const BillHistory = () => {
                                                             </div>
                                                         ))}
                                                     </div>
+
+                                                    {bill.payments && bill.payments.length > 0 && (
+                                                        <>
+                                                            <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2 mt-4 border-t border-gray-100 dark:border-gray-800 pt-3">Payment History</h4>
+                                                            <div className="space-y-1">
+                                                                {bill.payments.map((p, i) => (
+                                                                    <div key={i} className="flex justify-between text-xs text-gray-500">
+                                                                        <span>{new Date(p.date).toLocaleString()} ({p.payment_mode})</span>
+                                                                        <span className="font-medium text-gray-900 dark:text-gray-300">₹{parseFloat(p.amount).toFixed(2)}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -244,7 +336,9 @@ const BillHistory = () => {
                         </div>
 
                         <div className="flex-1 overflow-auto bg-gray-100 p-6">
-                            <BillTemplate bill={viewBill} className="block w-full min-h-[500px] shadow-lg" />
+                            <div className="print-only">
+                                <BillTemplate bill={viewBill} settings={settings} className="block w-full min-h-[500px] shadow-lg" />
+                            </div>
                         </div>
 
                         <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end gap-3">
@@ -265,7 +359,83 @@ const BillHistory = () => {
                     </div>
                 </div>
             )}
-        </div>
+
+
+            {/* Update Payment Modal */}
+            {
+                showPayModal && payBillData && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                        <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Update Payment</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs text-gray-500 uppercase">Amount to Pay (₹)</label>
+                                    <input
+                                        type="number"
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-lg font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                        value={paymentAmount}
+                                        onChange={(e) => setPaymentAmount(e.target.value)}
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">Balance Due: ₹{payBillData.balance_due || (payBillData.total_amount - (payBillData.amount_paid || 0))}</p>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs text-gray-500 uppercase mb-2 block">Payment Mode</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {['Cash', 'UPI/Online'].map(mode => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => setPaymentMode(mode)}
+                                                className={`py-2 rounded-lg border text-sm font-medium transition-all ${paymentMode === mode
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                                                    }`}
+                                            >
+                                                {mode}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4">
+                                    <button onClick={() => setShowPayModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+                                    <button
+                                        onClick={async () => {
+                                            if (window.api) {
+                                                const paid = parseFloat(paymentAmount) || 0;
+                                                const totalPaid = (payBillData.amount_paid || 0) + paid;
+                                                const newBalance = Math.max(0, payBillData.total_amount - totalPaid);
+                                                const status = newBalance <= 0 ? 'Paid' : 'Partial';
+
+                                                try {
+                                                    await window.api.updateBillPayment({
+                                                        billId: payBillData.id,
+                                                        amountPaid: totalPaid,
+                                                        paymentMode: paymentMode, // Updates last payment mode
+                                                        status,
+                                                        balanceDue: newBalance,
+                                                        newPaymentAmount: paid
+                                                    });
+
+                                                    loadBills();
+                                                    setShowPayModal(false);
+                                                } catch (err) {
+                                                    console.error(err);
+                                                }
+                                            }
+                                        }}
+                                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/30 active:scale-95"
+                                    >
+                                        Confirm Payment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div >
+                )
+            }
+        </div >
     );
 };
 

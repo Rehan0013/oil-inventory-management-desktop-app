@@ -10,6 +10,7 @@ import Billing from './pages/Billing';
 import Employees from './pages/Employees';
 import Users from './pages/Users';
 import BillHistory from './pages/BillHistory';
+import Settings from './pages/Settings';
 
 // Protected Route Component
 const PrivateRoute = () => {
@@ -45,6 +46,7 @@ function App() {
                 <Route path="/bill-history" element={<BillHistory />} />
                 <Route path="/employees" element={<Employees />} />
                 <Route path="/users" element={<Users />} />
+                <Route path="/settings" element={<Settings />} />
               </Route>
             </Routes>
           </Router>

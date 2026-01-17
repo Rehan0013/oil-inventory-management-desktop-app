@@ -25,10 +25,21 @@ contextBridge.exposeInMainWorld('api', {
     createBill: (data) => ipcRenderer.invoke('create-bill', data),
     searchCustomers: (query) => ipcRenderer.invoke('search-customers', query),
     getBills: (filters) => ipcRenderer.invoke('get-bills', filters),
+    updateBillPayment: (data) => ipcRenderer.invoke('update-bill-payment', data),
 
     // Dashboard
+
     getDashboardStats: () => ipcRenderer.invoke('get-dashboard-stats'),
+
+    // Settings
+    getSettings: () => ipcRenderer.invoke('get-settings'),
+    saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
     print: () => ipcRenderer.invoke('print'),
     savePdf: () => ipcRenderer.invoke('save-pdf'),
+
+    // Auto Update
+    onUpdateAvailable: (callback) => ipcRenderer.on('update-available', callback),
+    onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', callback),
+    restartApp: () => ipcRenderer.invoke('restart-app'),
 });

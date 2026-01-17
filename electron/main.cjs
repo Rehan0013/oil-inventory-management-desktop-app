@@ -1,5 +1,6 @@
 
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const db = require('./db.cjs');
 
@@ -25,7 +26,25 @@ function createWindow() {
     if (isDev) {
         mainWindow.webContents.openDevTools();
     }
+
+    // Auto Update Logic
+    mainWindow.once('ready-to-show', () => {
+        autoUpdater.checkForUpdatesAndNotify();
+    });
 }
+
+// Auto Updater Events
+autoUpdater.on('update-available', () => {
+    mainWindow.webContents.send('update-available');
+});
+
+autoUpdater.on('update-downloaded', () => {
+    mainWindow.webContents.send('update-downloaded');
+});
+
+ipcMain.handle('restart-app', () => {
+    autoUpdater.quitAndInstall();
+});
 
 app.whenReady().then(() => {
     createWindow();
@@ -96,8 +115,8 @@ ipcMain.handle('get-products', () => {
 });
 
 ipcMain.handle('add-product', (event, product) => {
-    const stmt = db.prepare('INSERT INTO products (name, quantity, price, description) VALUES (?, ?, ?, ?)');
-    return stmt.run(product.name, product.quantity, product.price, product.description);
+    const stmt = db.prepare('INSERT INTO products (name, quantity, price, description, batch_number) VALUES (?, ?, ?, ?, ?)');
+    return stmt.run(product.name, product.quantity, product.price, product.description, product.batchNumber);
 });
 
 ipcMain.handle('update-product-quantity', (event, { id, quantity }) => {
@@ -115,8 +134,18 @@ ipcMain.handle('search-customers', (event, query) => {
 });
 
 ipcMain.handle('update-product', (event, product) => {
-    return db.prepare('UPDATE products SET name = ?, quantity = ?, price = ?, description = ? WHERE id = ?')
-        .run(product.name, product.quantity, product.price, product.description, product.id);
+    return db.prepare('UPDATE products SET name = ?, quantity = ?, price = ?, description = ?, batch_number = ? WHERE id = ?')
+        .run(product.name, product.quantity, product.price, product.description, product.batchNumber, product.id);
+});
+
+ipcMain.handle('update-bill-payment', (event, { billId, amountPaid, paymentMode, status, balanceDue, newPaymentAmount }) => {
+    const transaction = db.transaction(() => {
+        db.updateBillPayment(billId, amountPaid, paymentMode, status, balanceDue);
+        if (newPaymentAmount && newPaymentAmount > 0) {
+            db.addPaymentRecord(billId, newPaymentAmount, paymentMode, new Date().toISOString());
+        }
+    });
+    return transaction();
 });
 
 ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType }) => {
@@ -135,30 +164,44 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
     }
 
     // 2. Insert Bill
-    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type, payment_status, amount_paid, balance_due) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
     const transaction = db.transaction((items) => {
-        // paymentMode is passed from args
-        const mode = paymentMode || 'Cash';
-        const dVal = paymentMode.discountValue || 0; // Likely passed as separate arg in object, see signature
-        // The signature is: { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType }
+        // Helper to extract values whether paymentMode is string (legacy/simple) or object
+        const isObj = typeof paymentMode === 'object' && paymentMode !== null;
+        const modeStr = isObj ? (paymentMode.mode || 'Cash') : (paymentMode || 'Cash');
+        const pStatus = isObj ? (paymentMode.status || 'Paid') : 'Paid';
+        const pAmountPaid = isObj && paymentMode.amountPaid !== undefined ? paymentMode.amountPaid : total_amount;
+        const pBalanceDue = isObj && paymentMode.balanceDue !== undefined ? paymentMode.balanceDue : 0;
 
-        const info = insertBill.run(
+        const params = [
             date,
             employee_id || null,
             customerId,
             customer.seller_name,
-            mode,
+            modeStr,
             total_amount,
             discountValue || 0,
-            discountType || 'amount'
-        );
+            discountType || 'amount',
+            pStatus,
+            pAmountPaid,
+            pBalanceDue
+        ];
+        console.log("Insert Bill Params:", params);
+
+        const info = insertBill.run(...params);
         const billId = info.lastInsertRowid;
-        const insertItem = db.prepare('INSERT INTO bill_items (bill_id, product_id, quantity, price_at_sale) VALUES (?, ?, ?, ?)');
+
+        // 3. Add Initial Payment Record if paid amount > 0
+        if (pAmountPaid > 0) {
+            db.addPaymentRecord(billId, pAmountPaid, modeStr, date);
+        }
+
+        const insertItem = db.prepare('INSERT INTO bill_items (bill_id, product_id, quantity, price_at_sale, batch_number) VALUES (?, ?, ?, ?, ?)');
         const updateStock = db.prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
 
         for (const item of items) {
-            insertItem.run(billId, item.id, item.count, item.price);
+            insertItem.run(billId, item.id, item.count, item.price, item.batch_number);
             updateStock.run(item.count, item.id);
         }
         return billId;
@@ -201,23 +244,36 @@ ipcMain.handle('get-bills', (event, filters = {}) => {
         query += ' AND c.name LIKE ?';
         params.push(`%${filters.customerName}%`);
     }
+    if (filters.paymentStatus) {
+        if (filters.paymentStatus === 'unpaid_partial') {
+            query += " AND (b.payment_status = 'Unpaid' OR b.payment_status = 'Partial')";
+        } else if (filters.paymentStatus !== 'all') {
+            query += ' AND b.payment_status = ?';
+            params.push(filters.paymentStatus);
+        }
+    }
 
     query += ' ORDER BY b.date DESC';
 
     const bills = db.prepare(query).all(...params);
 
-    // Attach items to each bill (optional, or load on demand)
-    const billsWithItems = bills.map(bill => {
+    // Attach items and payments to each bill (optional, or load on demand)
+    const billsWithDetails = bills.map(bill => {
         const items = db.prepare(`
             SELECT bi.*, p.name as product_name 
             FROM bill_items bi 
             JOIN products p ON bi.product_id = p.id 
             WHERE bi.bill_id = ?
         `).all(bill.id);
-        return { ...bill, items };
+
+        const payments = db.prepare(`
+            SELECT * FROM bill_payments WHERE bill_id = ? ORDER BY date DESC
+        `).all(bill.id);
+
+        return { ...bill, items, payments };
     });
 
-    return billsWithItems;
+    return billsWithDetails;
 });
 
 ipcMain.handle('get-dashboard-stats', () => {
@@ -253,6 +309,17 @@ ipcMain.handle('get-dashboard-stats', () => {
         recentBills,
         salesData
     };
+});
+
+
+
+// Settings
+ipcMain.handle('get-settings', () => {
+    return db.getSettings();
+});
+
+ipcMain.handle('save-settings', (event, settings) => {
+    return db.saveSettings(settings);
 });
 
 ipcMain.handle('print', (event) => {

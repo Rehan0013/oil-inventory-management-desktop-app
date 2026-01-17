@@ -1,13 +1,35 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LayoutDashboard, Package, Users, Receipt, LogOut, Shield, Moon, Sun, Monitor } from 'lucide-react';
+import { LayoutDashboard, Package, Users, Receipt, LogOut, Shield, Moon, Sun, Monitor, Settings, RefreshCw } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 
 const Sidebar = () => {
     const { user, logout } = useAuth();
     const { theme, setTheme } = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
+    const { addToast } = useToast();
+    const [updateAvailable, setUpdateAvailable] = useState(false);
+
+    useEffect(() => {
+        if (window.api) {
+            window.api.onUpdateAvailable(() => {
+                addToast('New update available. Downloading...', 'info');
+            });
+            window.api.onUpdateDownloaded(() => {
+                setUpdateAvailable(true);
+                addToast('Update downloaded. Restart to install.', 'success');
+            });
+        }
+    }, []);
+
+    const handleRestart = () => {
+        if (window.api) {
+            window.api.restartApp();
+        }
+    };
 
     const menuItems = [
         { title: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/' },
@@ -19,6 +41,7 @@ const Sidebar = () => {
     if (user?.role === 'owner') {
         menuItems.push({ title: 'Employees', icon: <Users size={20} />, path: '/employees' });
         menuItems.push({ title: 'Users', icon: <Shield size={20} />, path: '/users' });
+        menuItems.push({ title: 'Settings', icon: <Settings size={20} />, path: '/settings' });
     }
 
     const handleLogout = () => {
@@ -62,6 +85,15 @@ const Sidebar = () => {
             </nav>
 
             <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                {updateAvailable && (
+                    <button
+                        onClick={handleRestart}
+                        className="w-full flex items-center gap-3 justify-center p-3 mb-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-lg animate-bounce"
+                    >
+                        <RefreshCw size={20} />
+                        <span className="font-medium">Restart App</span>
+                    </button>
+                )}
                 <button
                     onClick={cycleTheme}
                     className="w-full flex items-center gap-2 justify-between p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"

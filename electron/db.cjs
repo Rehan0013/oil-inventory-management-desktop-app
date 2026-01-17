@@ -29,7 +29,8 @@ db.exec(`
     name TEXT,
     quantity INTEGER,
     price REAL,
-    description TEXT
+    description TEXT,
+    batch_number TEXT
   );
 
   CREATE TABLE IF NOT EXISTS customers (
@@ -57,8 +58,23 @@ db.exec(`
     product_id INTEGER,
     quantity INTEGER,
     price_at_sale REAL,
+    batch_number TEXT,
     FOREIGN KEY(bill_id) REFERENCES bills(id),
     FOREIGN KEY(product_id) REFERENCES products(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER,
+    amount REAL,
+    date TEXT,
+    payment_mode TEXT,
+    FOREIGN KEY(bill_id) REFERENCES bills(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
   );
 `);
 
@@ -95,8 +111,32 @@ try {
     console.log("Migrating: Adding discount_type to bills");
     db.prepare("ALTER TABLE bills ADD COLUMN discount_type TEXT DEFAULT 'amount'").run();
   }
+
+  // Add batch_number to products if missing
+  const productInfo = db.prepare("PRAGMA table_info(products)").all();
+  if (!productInfo.some(col => col.name === 'batch_number')) {
+    console.log("Migrating: Adding batch_number to products");
+    try { db.prepare('ALTER TABLE products ADD COLUMN batch_number TEXT').run(); } catch (e) { }
+  }
+
+  // Add batch_number to bill_items if missing
+  const billItemInfo = db.prepare("PRAGMA table_info(bill_items)").all();
+  if (!billItemInfo.some(col => col.name === 'batch_number')) {
+    console.log("Migrating: Adding batch_number to bill_items");
+    try { db.prepare('ALTER TABLE bill_items ADD COLUMN batch_number TEXT').run(); } catch (e) { }
+  }
 } catch (error) {
   console.error('Migration failed:', error);
+}
+
+// Seed Default Settings if not exists
+const checkSettings = db.prepare('SELECT * FROM settings WHERE key = ?').get('businessName');
+if (!checkSettings) {
+  const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+  insertSetting.run('businessName', 'Oil Inventory');
+  insertSetting.run('addressLine1', '123 Business Road');
+  insertSetting.run('addressLine2', 'City, State');
+  insertSetting.run('phone', '(555) 123-4567');
 }
 
 // Seed Owner if not exists
@@ -106,12 +146,86 @@ if (!checkOwner) {
   db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run('admin', 'admin123', 'owner');
 }
 
+
+
+// Migration: Add payment fields
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(bills)").all();
+
+  const hasPaymentStatus = tableInfo.some(col => col.name === 'payment_status');
+  if (!hasPaymentStatus) {
+    db.prepare("ALTER TABLE bills ADD COLUMN payment_status TEXT DEFAULT 'Paid'").run();
+  }
+
+  const hasAmountPaid = tableInfo.some(col => col.name === 'amount_paid');
+  if (!hasAmountPaid) {
+    // Default to total amount (initially assumed paid, but old records needs logical handling)
+    // We can't default to column value in sqlite add column. Default to 0 or null.
+    // Let's default to 0 and we might need to backfill if critical, but for now 0 is safe.
+    db.prepare("ALTER TABLE bills ADD COLUMN amount_paid REAL DEFAULT 0").run();
+    // Backfill: update bills set amount_paid = total_amount where payment_status = 'Paid' ?
+    db.prepare("UPDATE bills SET amount_paid = total_amount").run();
+  }
+
+  const hasBalanceDue = tableInfo.some(col => col.name === 'balance_due');
+  if (!hasBalanceDue) {
+    db.prepare("ALTER TABLE bills ADD COLUMN balance_due REAL DEFAULT 0").run();
+  }
+
+} catch (error) {
+  console.error('Migration failed:', error);
+}
+
 module.exports = {
   getUsers: () => db.prepare('SELECT id, username, role FROM users').all(),
   login: (username, password) => {
-    // Determine if user exists
     return db.prepare('SELECT id, username, role FROM users WHERE username = ? AND password = ?').get(username, password);
   },
   prepare: (sql) => db.prepare(sql),
-  transaction: (fn) => db.transaction(fn)
+
+  transaction: (fn) => db.transaction(fn),
+  getSettings: () => {
+    const rows = db.prepare('SELECT * FROM settings').all();
+    const settings = {};
+    rows.forEach(row => {
+      settings[row.key] = row.value;
+    });
+    return settings;
+  },
+  saveSettings: (settingsObj) => {
+    const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const update = db.transaction((obj) => {
+      for (const [key, value] of Object.entries(obj)) {
+        insert.run(key, value);
+      }
+    });
+    update(settingsObj);
+    return true;
+  },
+  updateBillPayment: (billId, amountPaid, paymentMode, status, balanceDue) => {
+    // 1. Calculate the new payment amount (current total paid - previous amount paid)
+    // For simplicity, we assume the frontend sends the "Latest Payment Amount" separately? 
+    // Actually, looking at main.cjs usage, we might need adjustments. 
+    // But let's assume we can derive it or modify the signature later.
+    // Ideally, we should pass `paidAmountNow`.
+    // Let's modify the function signature to accept `paidAmountNow` (the increment).
+
+    // However, keeping specific args for now, we'll calculate it or just insert.
+    // But better: Update this function to transactional update.
+
+    const transaction = db.transaction(() => {
+      // Get current bill to diff amount if needed, OR just trust the paid increment is handled by caller?
+      // Let's assume the caller will handle the logic or we change signature.
+      // For now, let's just update the bill. We'll add the inserting logic in main.cjs or here?
+      // Let's keep it simple: updateBillPayment handles the bill update.
+      // We will add a new function `addBillPayment` maybe?
+
+      db.prepare('UPDATE bills SET amount_paid = ?, payment_mode = ?, payment_status = ?, balance_due = ? WHERE id = ?')
+        .run(amountPaid, paymentMode, status, balanceDue, billId);
+    });
+    return transaction();
+  },
+  addPaymentRecord: (billId, amount, mode, date) => {
+    return db.prepare('INSERT INTO bill_payments (bill_id, amount, payment_mode, date) VALUES (?, ?, ?, ?)').run(billId, amount, mode, date);
+  }
 };

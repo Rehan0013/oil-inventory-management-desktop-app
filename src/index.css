@@ -101,22 +101,25 @@
 @media print {
     @page {
         size: A4;
-        margin: 0;
+        margin: 10mm;
     }
 
     html,
     body {
-        height: 100%;
-        width: 100%;
+        background: white !important;
+        color: black !important;
         margin: 0;
         padding: 0;
-        overflow: visible !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
+    /* HIDE EVERYTHING INITIALLY */
     body * {
         visibility: hidden;
     }
 
+    /* SHOW ONLY RECEIPT */
     .print-only,
     .print-only * {
         visibility: visible;
@@ -127,11 +130,32 @@
         left: 0;
         top: 0;
         width: 100%;
-        height: 100%;
         margin: 0;
         padding: 0;
-        background: white;
-        color: black;
-        z-index: 9999;
+        background: white !important;
+        color: black !important;
+    }
+
+    /* KILL EFFECTS */
+    * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+        animation: none !important;
+        transition: none !important;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    tr {
+        page-break-inside: avoid;
+    }
+
+    thead {
+        display: table-header-group;
     }
 }

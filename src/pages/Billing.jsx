@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { ShoppingCart, User, Plus, Printer, X, Check, RefreshCw, Search, FileText, CreditCard, Percent, IndianRupee, Package } from 'lucide-react';
+import { Printer, Save, X, Search, User, CreditCard, Tag, Percent, Receipt, Box, ShoppingCart, RefreshCw, IndianRupee, Check, Package, Plus } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import BillTemplate from '../components/BillTemplate';
+import { BUSINESS_DETAILS } from '../config/business';
 
 const Billing = () => {
     const { addToast } = useToast();
@@ -12,6 +13,10 @@ const Billing = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [paymentMode, setPaymentMode] = useState('Cash'); // Cash, UPI/Online
+    // New Payment State
+    const [paymentStatus, setPaymentStatus] = useState('Paid'); // Paid, Partial, Unpaid
+    const [amountPaid, setAmountPaid] = useState(''); // For Partial input
+    const [balanceDue, setBalanceDue] = useState(0);
 
     // Discount State
     const [discountValue, setDiscountValue] = useState(0);
@@ -25,6 +30,8 @@ const Billing = () => {
     // Bill State
     const [currentBillId, setCurrentBillId] = useState(null);
     const [lastBillData, setLastBillData] = useState(null); // For template
+    const [showBillModal, setShowBillModal] = useState(false);
+    const [settings] = useState(BUSINESS_DETAILS);
 
     const templateRef = useRef();
 
@@ -34,21 +41,33 @@ const Billing = () => {
 
     const loadData = async () => {
         if (window.api) {
-            const empData = await window.api.getEmployees();
-            const userData = await window.api.getUsers();
-            const prodData = await window.api.getProducts();
+            try {
+                setLoading(true);
+                const empData = await window.api.getEmployees();
+                const userData = await window.api.getUsers();
+                const prodData = await window.api.getProducts();
 
-            const formattedEmployees = empData.map(e => ({ ...e, type: 'employee', displayRole: 'Staff' }));
-            const formattedOwners = userData.filter(u => u.role === 'owner').map(u => ({
-                id: `owner_${u.id}`,
-                name: u.username,
-                type: 'owner',
-                displayRole: 'Owner',
-                dbId: u.id
-            }));
+                const formattedEmployees = empData.map(e => ({ ...e, type: 'employee', displayRole: 'Staff' }));
+                const formattedOwners = userData.filter(u => u.role === 'owner').map(u => ({
+                    id: `owner_${u.id}`,
+                    name: u.username,
+                    type: 'owner',
+                    displayRole: 'Owner',
+                    dbId: u.id
+                }));
 
-            setSellers([...formattedOwners, ...formattedEmployees]);
-            setProducts(prodData);
+                setSellers([...formattedOwners, ...formattedEmployees]);
+                setProducts(prodData);
+
+                // Settings are now hardcoded
+                // const settingsData = await window.api.getSettings();
+                // setSettings(settingsData);
+            } catch (err) {
+                console.error("Failed to load initial data", err);
+                addToast('Failed to load data', 'error');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
@@ -123,7 +142,23 @@ const Billing = () => {
         return Math.max(0, subtotal - discount);
     };
 
-    const handleCheckout = async () => {
+    // Calculate Balance Due whenever Total or Amount Paid changes
+    useEffect(() => {
+        const total = calculateTotal();
+        if (paymentStatus === 'Paid') {
+            setBalanceDue(0);
+            setAmountPaid(total.toFixed(2));
+        } else if (paymentStatus === 'Unpaid') {
+            setBalanceDue(total);
+            setAmountPaid('0');
+        } else {
+            // Partial
+            const paid = parseFloat(amountPaid) || 0;
+            setBalanceDue(Math.max(0, total - paid));
+        }
+    }, [cart, discountValue, discountType, paymentStatus, amountPaid]);
+
+    const processCheckout = async (shouldOpenModal = false) => {
         if (!selectedSeller) return addToast('Please select a seller', 'error');
         if (cart.length === 0) return addToast('Cart is empty', 'error');
         if (!customer.name || !customer.phone) return addToast('Please enter customer details', 'error');
@@ -137,7 +172,14 @@ const Billing = () => {
             items: cart,
             total_amount: total,
             date: new Date().toISOString(),
-            paymentMode: paymentMode,
+            total_amount: total,
+            date: new Date().toISOString(),
+            paymentMode: { // enhanced payment object
+                mode: paymentMode,
+                status: paymentStatus,
+                amountPaid: parseFloat(amountPaid) || 0,
+                balanceDue: balanceDue
+            },
             discountValue: parseFloat(discountValue) || 0,
             discountType: discountType
         };
@@ -153,6 +195,10 @@ const Billing = () => {
                 await loadData();
                 setCart([]);
                 addToast('Bill Created Successfully!', 'success');
+
+                if (shouldOpenModal) {
+                    setShowBillModal(true);
+                }
             } catch (err) {
                 console.error(err);
                 addToast('Failed to create bill', 'error');
@@ -161,9 +207,24 @@ const Billing = () => {
         setLoading(false);
     };
 
+    const handleCheckout = () => processCheckout(false);
+    const handlePrintAndComplete = () => processCheckout(true);
+
     const handlePrint = async () => {
         if (!lastBillData) return;
-        window.print();
+
+        // Add printing class to body to toggle CSS styles
+        document.body.classList.add("printing");
+
+        // Delay to ensure rendering, then print
+        setTimeout(() => {
+            window.print();
+
+            // Cleanup
+            setTimeout(() => {
+                document.body.classList.remove("printing");
+            }, 500);
+        }, 100);
     };
 
     const handleSavePdf = async () => {
@@ -183,7 +244,11 @@ const Billing = () => {
         setLastBillData(null);
         setSelectedSeller(null);
         setCustomer({ name: '', phone: '' });
+        setCustomer({ name: '', phone: '' });
         setPaymentMode('Cash');
+        setPaymentStatus('Paid');
+        setAmountPaid('');
+        setBalanceDue(0);
         setDiscountValue(0);
         setDiscountType('amount');
         addToast('New bill started', 'info');
@@ -196,7 +261,7 @@ const Billing = () => {
 
             {/* Hidden Print Template */}
             <div className="print-only">
-                <BillTemplate bill={lastBillData} />
+                <BillTemplate bill={lastBillData} settings={settings} />
             </div>
 
             {/* Left Side: Product Selection */}
@@ -270,7 +335,10 @@ const Billing = () => {
 
                                 <div>
                                     <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 mb-1" title={product.name}>{product.name}</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Unit Price</p>
+                                    <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                                        <span>Unit Price</span>
+                                        {product.batch_number && <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-[10px]">{product.batch_number}</span>}
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100 dark:border-gray-700/50">
@@ -435,6 +503,47 @@ const Billing = () => {
                         </button>
                     </div>
 
+                    {/* Payment Status & Partial Logic */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                            {['Paid', 'Partial', 'Unpaid'].map(status => (
+                                <button
+                                    key={status}
+                                    onClick={() => setPaymentStatus(status)}
+                                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${paymentStatus === status
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                        }`}
+                                >
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+
+                        {paymentStatus === 'Partial' && (
+                            <div className="flex justify-between items-center bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg border border-yellow-100 dark:border-yellow-900/30">
+                                <span className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">Paid Amount:</span>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-gray-500">₹</span>
+                                    <input
+                                        type="number"
+                                        className="w-20 bg-white dark:bg-gray-800 border border-yellow-200 dark:border-yellow-800 rounded px-2 py-1 text-right text-gray-900 dark:text-white outline-none focus:border-yellow-400"
+                                        value={amountPaid}
+                                        onChange={(e) => setAmountPaid(e.target.value)}
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {(paymentStatus === 'Partial' || paymentStatus === 'Unpaid') && (
+                            <div className="flex justify-between items-center px-2">
+                                <span className="text-sm text-red-500 font-medium">Balance Due:</span>
+                                <span className="text-sm font-bold text-red-600">₹{balanceDue.toFixed(2)}</span>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Totals */}
                     <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
                         <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
@@ -456,16 +565,64 @@ const Billing = () => {
                     </div>
 
 
-                    <button
-                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg py-3 flex items-center justify-center gap-2 font-medium shadow-lg shadow-blue-900/30 transition-all active:scale-95 disabled:opacity-70"
-                        onClick={handleCheckout}
-                        disabled={loading || cart.length === 0}
-                    >
-                        {loading ? <RefreshCw className="animate-spin" size={18} /> : <Check size={18} />}
-                        {loading ? 'Processing...' : 'Complete Bill'}
-                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-lg py-3 flex items-center justify-center gap-2 font-medium shadow-lg shadow-emerald-900/30 transition-all active:scale-95 disabled:opacity-70"
+                            onClick={handlePrintAndComplete}
+                            disabled={loading || cart.length === 0}
+                        >
+                            {loading ? <RefreshCw className="animate-spin" size={18} /> : <Printer size={18} />}
+                            {loading ? 'Processing...' : 'Print & Complete'}
+                        </button>
+                        <button
+                            className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg py-3 flex items-center justify-center gap-2 font-medium shadow-lg shadow-blue-900/30 transition-all active:scale-95 disabled:opacity-70"
+                            onClick={handleCheckout}
+                            disabled={loading || cart.length === 0}
+                        >
+                            {loading ? <RefreshCw className="animate-spin" size={18} /> : <Check size={18} />}
+                            {loading ? 'Processing...' : 'Complete Only'}
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {/* Bill Success Modal */}
+            {
+                showBillModal && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+                        <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl animate-scale-in overflow-hidden">
+                            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Bill Created Successfully</h2>
+                                <button onClick={() => setShowBillModal(false)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-auto bg-gray-100 p-6">
+                                <div className="print-only">
+                                    <BillTemplate bill={lastBillData} settings={settings} className="block w-full min-h-[500px] shadow-lg" />
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowBillModal(false)}
+                                    className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={handlePrint}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+                                >
+                                    <Printer size={18} />
+                                    Print Receipt
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div>
     );
 };
