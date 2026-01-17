@@ -1,4 +1,5 @@
-# Oil Inventory Management System
+# Oilstro
+> Version: 2.1.1
 
 A comprehensive desktop application for managing oil inventory, billing, and employees. Built with Electron, React, and SQLite.
 
@@ -25,6 +26,9 @@ A comprehensive desktop application for managing oil inventory, billing, and emp
 ### 🎨 Modern UI/UX
 - **Dark/Light Mode**: Fully responsive theme support.
 - **Dashboard**: Real-time statistics on sales, revenue, and stock.
+- **Loading Screen**: Branded "AstroDEV" splash screen with smooth animations.
+- **Dynamic Branding**: Configurable business name handling (Oilstro).
+- **Custom App Icon**: Sleek, transparent branding.
 
 ## Tech Stack
 
@@ -80,7 +84,3 @@ This project includes a CI/CD workflow (`.github/workflows/electron-build.yml`) 
   - `pages/` - Application views (Dashboard, Billing, Inventory, etc.).
   - `lib/` - Utilities.
 - `release/` - Output directory for builds.
-
-## License
-
-[Your License Here]
