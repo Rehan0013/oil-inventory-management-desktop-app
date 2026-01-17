@@ -112,6 +112,18 @@ try {
     db.prepare("ALTER TABLE bills ADD COLUMN discount_type TEXT DEFAULT 'amount'").run();
   }
 
+  const hasTaxRate = tableInfo.some(col => col.name === 'tax_rate');
+  if (!hasTaxRate) {
+    console.log("Migrating: Adding tax_rate to bills");
+    db.prepare('ALTER TABLE bills ADD COLUMN tax_rate REAL DEFAULT 0').run();
+  }
+
+  const hasTaxAmount = tableInfo.some(col => col.name === 'tax_amount');
+  if (!hasTaxAmount) {
+    console.log("Migrating: Adding tax_amount to bills");
+    db.prepare('ALTER TABLE bills ADD COLUMN tax_amount REAL DEFAULT 0').run();
+  }
+
   // Add batch_number to products if missing
   const productInfo = db.prepare("PRAGMA table_info(products)").all();
   if (!productInfo.some(col => col.name === 'batch_number')) {

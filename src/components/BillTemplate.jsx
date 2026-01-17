@@ -7,7 +7,12 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
 
     const subtotal = bill.items.reduce((sum, item) => sum + ((item.price || item.price_at_sale) * (item.count || item.quantity)), 0);
     const discountValue = bill.discount_value || bill.discountValue || 0;
+    const discountType = bill.discount_type || bill.discountType || 'amount';
+    const taxRate = bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0);
+    const taxAmount = bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0);
+
     const hasDiscount = discountValue > 0;
+    const hasTax = taxRate > 0;
 
     const customerName = bill.customer?.name || bill.customer_name || 'Walk-in';
     const customerPhone = bill.customer?.phone || bill.customer_phone || '';
@@ -75,9 +80,27 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
                     </div>
                     {hasDiscount && (
                         <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
-                            <span>Disc ({bill.discount_type === 'percent' ? `${discountValue}%` : '₹'}):</span>
-                            <span>-₹{(subtotal - bill.total_amount).toFixed(2)}</span>
+                            <span>Disc ({discountType === 'percent' ? `${discountValue}%` : '₹'}):</span>
+                            <span>-₹{(subtotal - (bill.total_amount - taxAmount)).toFixed(2)}</span>
                         </div>
+                    )}
+
+                    {/* Tax Breakdown */}
+                    {hasTax && (
+                        <>
+                            <div className="flex justify-between py-0.5 text-[10px]">
+                                <span>Taxable Amount:</span>
+                                <span>₹{(bill.total_amount - taxAmount).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
+                                <span>CGST ({(taxRate / 2).toFixed(1)}%):</span>
+                                <span>₹{(taxAmount / 2).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
+                                <span>SGST ({(taxRate / 2).toFixed(1)}%):</span>
+                                <span>₹{(taxAmount / 2).toFixed(2)}</span>
+                            </div>
+                        </>
                     )}
                     <div className="flex justify-between py-1 border-t border-black mt-1">
                         <span className="font-bold text-base">Total:</span>

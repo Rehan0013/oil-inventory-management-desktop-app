@@ -22,6 +22,9 @@ const Billing = () => {
     const [discountValue, setDiscountValue] = useState(0);
     const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percent'
 
+    // Tax State
+    const [taxRate, setTaxRate] = useState(0); // GST %
+
     // Customer State
     const [customer, setCustomer] = useState({ name: '', phone: '' });
     const [suggestions, setSuggestions] = useState([]);
@@ -131,7 +134,7 @@ const Billing = () => {
         return cart.reduce((sum, item) => sum + (item.price * item.count), 0);
     };
 
-    const calculateTotal = () => {
+    const calculateBillDetails = () => {
         const subtotal = calculateSubtotal();
         let discount = 0;
         if (discountType === 'percent') {
@@ -139,12 +142,24 @@ const Billing = () => {
         } else {
             discount = parseFloat(discountValue) || 0;
         }
-        return Math.max(0, subtotal - discount);
+        const afterDiscount = Math.max(0, subtotal - discount);
+
+        // Calculate Tax
+        const taxAmount = afterDiscount * (taxRate / 100);
+        const total = afterDiscount + taxAmount;
+
+        return {
+            subtotal,
+            discount,
+            taxableAmount: afterDiscount,
+            taxAmount,
+            total
+        };
     };
 
     // Calculate Balance Due whenever Total or Amount Paid changes
     useEffect(() => {
-        const total = calculateTotal();
+        const { total } = calculateBillDetails();
         if (paymentStatus === 'Paid') {
             setBalanceDue(0);
             setAmountPaid(total.toFixed(2));
@@ -156,7 +171,7 @@ const Billing = () => {
             const paid = parseFloat(amountPaid) || 0;
             setBalanceDue(Math.max(0, total - paid));
         }
-    }, [cart, discountValue, discountType, paymentStatus, amountPaid]);
+    }, [cart, discountValue, discountType, taxRate, paymentStatus, amountPaid]);
 
     const processCheckout = async (shouldOpenModal = false) => {
         if (!selectedSeller) return addToast('Please select a seller', 'error');
@@ -164,7 +179,7 @@ const Billing = () => {
         if (!customer.name || !customer.phone) return addToast('Please enter customer details', 'error');
 
         setLoading(true);
-        const total = calculateTotal();
+        const { subtotal, discount, taxableAmount, taxAmount, total } = calculateBillDetails();
 
         const billData = {
             employee_id: selectedSeller.type === 'employee' ? selectedSeller.id : null,
@@ -180,7 +195,9 @@ const Billing = () => {
                 balanceDue: balanceDue
             },
             discountValue: parseFloat(discountValue) || 0,
-            discountType: discountType
+            discountType: discountType,
+            taxRate: parseFloat(taxRate) || 0,
+            taxAmount: taxAmount
         };
 
         if (window.api) {
@@ -250,6 +267,7 @@ const Billing = () => {
         setBalanceDue(0);
         setDiscountValue(0);
         setDiscountType('amount');
+        setTaxRate(0);
         addToast('New bill started', 'info');
     };
 
@@ -543,24 +561,67 @@ const Billing = () => {
                         )}
                     </div>
 
+                    {/* Tax Input */}
+                    <div className="flex justify-between items-center px-1">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">GST / Tax (%)</span>
+                        <div className="flex items-center gap-2">
+                            {/* Presets */}
+                            {[0, 5, 12, 18].map(rate => (
+                                <button
+                                    key={rate}
+                                    onClick={() => setTaxRate(rate)}
+                                    className={`px-2 py-1 text-xs rounded border transition-colors ${taxRate === rate ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    {rate}%
+                                </button>
+                            ))}
+                            <input
+                                type="number"
+                                className="w-16 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-right text-gray-900 dark:text-white outline-none focus:border-blue-500 text-sm"
+                                value={taxRate}
+                                onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                            />
+                        </div>
+                    </div>
+
                     {/* Totals */}
                     <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
-                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
-                            <span>Subtotal</span>
-                            <span>₹{calculateSubtotal().toFixed(2)}</span>
-                        </div>
-                        {discountValue > 0 && (
-                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
-                                <span>Discount ({discountType === 'percent' ? `${discountValue}%` : '₹'})</span>
-                                <span>-₹{(calculateSubtotal() - calculateTotal()).toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-center mt-2">
-                            <span className="font-bold text-gray-900 dark:text-white">Total</span>
-                            <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-500">
-                                ₹{calculateTotal().toFixed(2)}
-                            </span>
-                        </div>
+                        {(() => {
+                            const { subtotal, discount, taxableAmount, taxAmount, total } = calculateBillDetails();
+                            return (
+                                <>
+                                    <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                                        <span>Subtotal</span>
+                                        <span>₹{subtotal.toFixed(2)}</span>
+                                    </div>
+                                    {discount > 0 && (
+                                        <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                                            <span>Discount ({discountType === 'percent' ? `${discountValue}%` : '₹'})</span>
+                                            <span>-₹{discount.toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    {(taxRate > 0 || discount > 0) && (
+                                        <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                            <span>Taxable Amount</span>
+                                            <span>₹{taxableAmount.toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    {taxRate > 0 && (
+                                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                                            <span>GST ({taxRate}%)</span>
+                                            <span>+₹{taxAmount.toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                        <span className="font-bold text-gray-900 dark:text-white">Total</span>
+                                        <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-500">
+                                            ₹{total.toFixed(2)}
+                                        </span>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
 
 

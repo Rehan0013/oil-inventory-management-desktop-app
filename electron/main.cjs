@@ -153,7 +153,7 @@ ipcMain.handle('update-bill-payment', (event, { billId, amountPaid, paymentMode,
     return transaction();
 });
 
-ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType }) => {
+ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType, taxRate, taxAmount }) => {
     // 1. Handle Customer (Upsert)
     let customerId = null;
     if (customer && customer.phone) {
@@ -169,7 +169,7 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
     }
 
     // 2. Insert Bill
-    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type, payment_status, amount_paid, balance_due) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type, payment_status, amount_paid, balance_due, tax_rate, tax_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
     const transaction = db.transaction((items) => {
         // Helper to extract values whether paymentMode is string (legacy/simple) or object
@@ -190,7 +190,9 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
             discountType || 'amount',
             pStatus,
             pAmountPaid,
-            pBalanceDue
+            pBalanceDue,
+            taxRate || 0,
+            taxAmount || 0
         ];
         console.log("Insert Bill Params:", params);
 
