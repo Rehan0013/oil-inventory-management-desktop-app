@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LayoutDashboard, Package, Users, Receipt, LogOut, Shield, Moon, Sun, Monitor, Settings, RefreshCw } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { BUSINESS_DETAILS } from '../config/business';
 
 const Sidebar = () => {
     const { user, logout } = useAuth();
@@ -64,7 +65,7 @@ const Sidebar = () => {
     return (
         <div className="w-64 h-screen flex flex-col transition-colors duration-300 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300">
             <div className="p-6 border-b border-gray-200 dark:border-gray-800">
-                <h1 className="text-xl font-bold tracking-wider text-gray-900 dark:text-white">OIL MASTER</h1>
+                <h1 className="text-xl font-bold tracking-wider text-gray-900 dark:text-white uppercase">{BUSINESS_DETAILS.businessName}</h1>
                 <p className="text-xs text-gray-500 mt-1">Inventory Management</p>
             </div>
 

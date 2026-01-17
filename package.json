@@ -1,10 +1,10 @@
 {
-  "name": "oil-inventory-management",
+  "name": "oilstro",
   "private": true,
   "version": "2.0.0",
   "main": "electron/main.cjs",
   "author": "Rehan Ali",
-  "description": "Oil Inventory Management Desktop Application",
+  "description": "Oilstro Desktop Application",
   "scripts": {
     "dev": "vite",
     "postinstall": "electron-builder install-app-deps",
@@ -21,8 +21,8 @@
     "url": "https://github.com/Rehan0013/oil-inventory-management-desktop-app"
   },
   "build": {
-    "appId": "com.oilinventory.app",
-    "productName": "Oil Inventory Management",
+    "appId": "com.oilstro.app",
+    "productName": "Oilstro",
     "publish": [
       {
         "provider": "github",
@@ -41,11 +41,16 @@
     ],
     "npmRebuild": false,
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "icon": "src/assets/icon.icns"
+    },
+    "linux": {
+      "icon": "src/assets/icon.png"
     }
   },
   "dependencies": {

@@ -15,7 +15,7 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
         },
-        // icon: path.join(__dirname, '../public/icon.png')
+        icon: path.join(__dirname, !app.isPackaged ? '../public/icon.png' : '../dist/icon.png')
     });
 
     const isDev = !app.isPackaged;
@@ -47,6 +47,11 @@ ipcMain.handle('restart-app', () => {
 });
 
 app.whenReady().then(() => {
+    if (process.platform === 'darwin') {
+        const iconPath = path.join(__dirname, !app.isPackaged ? '../public/icon.png' : '../dist/icon.png');
+        app.dock.setIcon(iconPath);
+    }
+
     createWindow();
 
     app.on('activate', () => {

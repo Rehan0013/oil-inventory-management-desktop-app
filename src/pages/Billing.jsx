@@ -172,8 +172,7 @@ const Billing = () => {
             items: cart,
             total_amount: total,
             date: new Date().toISOString(),
-            total_amount: total,
-            date: new Date().toISOString(),
+
             paymentMode: { // enhanced payment object
                 mode: paymentMode,
                 status: paymentStatus,

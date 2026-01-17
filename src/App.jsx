@@ -1,8 +1,11 @@
+import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+
 import { ThemeProvider } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
+import LoadingScreen from './components/LoadingScreen';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
@@ -31,6 +34,20 @@ const PrivateRoute = () => {
 };
 
 function App() {
+  const [showSplash, setShowSplash] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (showSplash) {
+    return <LoadingScreen />;
+  }
+
   return (
     <AuthProvider>
       <ToastProvider>

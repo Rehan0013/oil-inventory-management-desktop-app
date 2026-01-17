@@ -152,8 +152,7 @@ const Inventory = () => {
         <div className="p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory Management</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage stock, prices, and product details</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory</h1>
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">

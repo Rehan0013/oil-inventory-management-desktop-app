@@ -22,7 +22,7 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
     return (
         <div ref={refProp} className={`${className || 'hidden print:block'} bg-white text-black w-[79mm] min-h-[100mm] p-2 mx-auto relative flex flex-col font-sans shadow-xl print:shadow-none print:w-full print:h-full text-[10px] leading-tight`}>
             <div className="text-center mb-4">
-                <h1 className="text-xl font-bold uppercase tracking-wide mb-1">{businessName || 'Oil Inventory'}</h1>
+                <h1 className="text-xl font-bold uppercase tracking-wide mb-1">{businessName || 'Oilstro'}</h1>
                 <p className="text-[10px] text-gray-800">{addressLine1 || '123 Business Road'}</p>
                 <p className="text-[10px] text-gray-800">{addressLine2 || 'City, State'}</p>
                 <p className="text-[10px] text-gray-800">Ph: {phone || '(555) 123-4567'}</p>
