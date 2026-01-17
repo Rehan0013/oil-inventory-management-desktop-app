@@ -1,7 +1,7 @@
 {
   "name": "oil-inventory-management",
   "private": true,
-  "version": "1.0.1",
+  "version": "2.0.0",
   "main": "electron/main.cjs",
   "author": "Rehan Ali",
   "description": "Oil Inventory Management Desktop Application",
@@ -16,9 +16,20 @@
     "package": "vite build && electron-builder",
     "dist": "vite build && electron-builder"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rehan0013/oil-inventory-management-desktop-app"
+  },
   "build": {
     "appId": "com.oilinventory.app",
     "productName": "Oil Inventory Management",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Rehan0013",
+        "repo": "oil-inventory-management-desktop-app"
+      }
+    ],
     "directories": {
       "output": "release"
     },
@@ -40,6 +51,7 @@
   "dependencies": {
     "better-sqlite3": "^12.6.0",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.7.3",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
