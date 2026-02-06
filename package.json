@@ -1,7 +1,7 @@
 {
   "name": "oilstro",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "main": "electron/main.cjs",
   "author": "Rehan Ali",
   "description": "Oilstro Desktop Application",
