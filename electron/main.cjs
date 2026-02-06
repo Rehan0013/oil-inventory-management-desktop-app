@@ -153,7 +153,8 @@ ipcMain.handle('update-bill-payment', (event, { billId, amountPaid, paymentMode,
     return transaction();
 });
 
-ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType, taxRate, taxAmount }) => {
+ipcMain.handle('create-bill', (event, args) => {
+    const { employee_id, items, total_amount, date, customer, paymentMode, discountValue, discountType, taxRate, taxAmount } = args;
     // 1. Handle Customer (Upsert)
     let customerId = null;
     if (customer && customer.phone) {
@@ -169,7 +170,7 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
     }
 
     // 2. Insert Bill
-    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type, payment_status, amount_paid, balance_due, tax_rate, tax_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertBill = db.prepare('INSERT INTO bills (date, employee_id, customer_id, seller_name, payment_mode, total_amount, discount_value, discount_type, payment_status, amount_paid, balance_due, tax_rate, tax_amount, calculation_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
     const transaction = db.transaction((items) => {
         // Helper to extract values whether paymentMode is string (legacy/simple) or object
@@ -192,7 +193,8 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
             pAmountPaid,
             pBalanceDue,
             taxRate || 0,
-            taxAmount || 0
+            taxAmount || 0,
+            args.calculationMode || 'global' // Pass calculationMode via args
         ];
         console.log("Insert Bill Params:", params);
 
@@ -204,11 +206,20 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
             db.addPaymentRecord(billId, pAmountPaid, modeStr, date);
         }
 
-        const insertItem = db.prepare('INSERT INTO bill_items (bill_id, product_id, quantity, price_at_sale, batch_number) VALUES (?, ?, ?, ?, ?)');
+        const insertItem = db.prepare('INSERT INTO bill_items (bill_id, product_id, quantity, price_at_sale, batch_number, discount_value, discount_type, tax_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
         const updateStock = db.prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
 
         for (const item of items) {
-            insertItem.run(billId, item.id, item.count, item.price, item.batch_number);
+            insertItem.run(
+                billId,
+                item.id,
+                item.count,
+                item.price,
+                item.batch_number,
+                item.discountValue || 0,
+                item.discountType || 'amount',
+                item.taxRate || 0
+            );
             updateStock.run(item.count, item.id);
         }
         return billId;
@@ -219,7 +230,7 @@ ipcMain.handle('create-bill', (event, { employee_id, items, total_amount, date, 
 
 ipcMain.handle('get-bills', (event, filters = {}) => {
     let query = `
-        SELECT b.*, e.name as employee_name, c.name as customer_name, c.phone as customer_phone 
+        SELECT b.*, b.calculation_mode as calculationMode, e.name as employee_name, c.name as customer_name, c.phone as customer_phone 
         FROM bills b 
         LEFT JOIN employees e ON b.employee_id = e.id 
         LEFT JOIN customers c ON b.customer_id = c.id
@@ -267,7 +278,10 @@ ipcMain.handle('get-bills', (event, filters = {}) => {
     // Attach items and payments to each bill (optional, or load on demand)
     const billsWithDetails = bills.map(bill => {
         const items = db.prepare(`
-            SELECT bi.*, p.name as product_name 
+            SELECT 
+                bi.id, bi.bill_id, bi.product_id, bi.quantity, bi.price_at_sale, bi.batch_number,
+                bi.discount_value as discountValue, bi.discount_type as discountType, bi.tax_rate as taxRate,
+                p.name as product_name 
             FROM bill_items bi 
             JOIN products p ON bi.product_id = p.id 
             WHERE bi.bill_id = ?

@@ -286,12 +286,61 @@ const BillHistory = () => {
 
                                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Bill Items</h4>
                                                     <div className="space-y-2">
-                                                        {bill.items && bill.items.map((item, idx) => (
-                                                            <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-100 dark:border-gray-800 last:border-0 border-dashed">
-                                                                <span className="text-gray-700 dark:text-gray-300">{item.product_name} x{item.quantity}</span>
-                                                                <span className="text-gray-900 dark:text-white font-medium">₹{item.price_at_sale.toFixed(2)}</span>
+                                                        {bill.items && bill.items.map((item, idx) => {
+                                                            let displayTaxRate = 0;
+                                                            let displayDisc = null;
+
+                                                            // Logic for Displaying Tax/Disc (Mirrors BillTemplate)
+                                                            if (bill.calculationMode === 'itemized') {
+                                                                displayTaxRate = item.taxRate || 0;
+                                                                if (item.discountValue > 0) {
+                                                                    displayDisc = item.discountType === 'percent' ? `${item.discountValue}%` : `₹${item.discountValue}`;
+                                                                }
+                                                            } else {
+                                                                // Global Mode
+                                                                displayTaxRate = bill.taxRate || bill.tax_rate || 0;
+                                                                const globalDescVal = bill.discountValue || bill.discount_value || 0;
+                                                                const globalDescType = bill.discountType || bill.discount_type || 'amount';
+
+                                                                if (globalDescVal > 0) {
+                                                                    displayDisc = globalDescType === 'percent' ? `${globalDescVal}%` : `(Global)`;
+                                                                }
+                                                            }
+
+                                                            return (
+                                                                <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-100 dark:border-gray-800 last:border-0 border-dashed">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-gray-700 dark:text-gray-300">{item.product_name} x{item.quantity}</span>
+                                                                        <div className="text-xs text-gray-500 flex gap-2">
+                                                                            <span>Batch: {item.batchNumber || item.batch_number}</span>
+                                                                            {displayTaxRate > 0 && <span className="text-blue-600">GST: {displayTaxRate}%</span>}
+                                                                            {displayDisc && <span className="text-green-600">Disc: {displayDisc}</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="text-gray-900 dark:text-white font-medium">₹{(item.price_at_sale * item.quantity).toFixed(2)}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Bill Summary Section */}
+                                                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-4 space-y-1 text-sm">
+                                                        {(bill.discountValue > 0 || bill.discount_value > 0 || bill.finalDiscount > 0) && (
+                                                            <div className="flex justify-between text-gray-500">
+                                                                <span>Discount</span>
+                                                                <span className="text-green-600">-₹{(bill.finalDiscount || bill.discount_value || 0).toFixed(2)}</span>
                                                             </div>
-                                                        ))}
+                                                        )}
+                                                        {(bill.taxRate > 0 || bill.tax_rate > 0 || bill.finalTax > 0) && (
+                                                            <div className="flex justify-between text-gray-500">
+                                                                <span>Tax (GST)</span>
+                                                                <span className="text-red-600">+₹{(bill.finalTax || bill.tax_amount || 0).toFixed(2)}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-gray-700">
+                                                            <span>Total Amount</span>
+                                                            <span>₹{bill.total_amount.toFixed(2)}</span>
+                                                        </div>
                                                     </div>
 
                                                     {bill.payments && bill.payments.length > 0 && (

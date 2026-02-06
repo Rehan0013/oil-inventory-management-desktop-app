@@ -137,6 +137,30 @@ try {
     console.log("Migrating: Adding batch_number to bill_items");
     try { db.prepare('ALTER TABLE bill_items ADD COLUMN batch_number TEXT').run(); } catch (e) { }
   }
+
+  // --- NEW MIGRATIONS FOR ITEMIZED BILLING ---
+
+  // 1. calculation_mode for bills
+  const hasCalcMode = tableInfo.some(col => col.name === 'calculation_mode');
+  if (!hasCalcMode) {
+    console.log("Migrating: Adding calculation_mode to bills");
+    try { db.prepare("ALTER TABLE bills ADD COLUMN calculation_mode TEXT DEFAULT 'global'").run(); } catch (e) { }
+  }
+
+  // 2. Item-level Tax/Discount fields
+  if (!billItemInfo.some(col => col.name === 'tax_rate')) {
+    console.log("Migrating: Adding tax_rate to bill_items");
+    try { db.prepare('ALTER TABLE bill_items ADD COLUMN tax_rate REAL DEFAULT 0').run(); } catch (e) { }
+  }
+  if (!billItemInfo.some(col => col.name === 'discount_value')) {
+    console.log("Migrating: Adding discount_value to bill_items");
+    try { db.prepare('ALTER TABLE bill_items ADD COLUMN discount_value REAL DEFAULT 0').run(); } catch (e) { }
+  }
+  if (!billItemInfo.some(col => col.name === 'discount_type')) {
+    console.log("Migrating: Adding discount_type to bill_items");
+    try { db.prepare("ALTER TABLE bill_items ADD COLUMN discount_type TEXT DEFAULT 'amount'").run(); } catch (e) { }
+  }
+
 } catch (error) {
   console.error('Migration failed:', error);
 }

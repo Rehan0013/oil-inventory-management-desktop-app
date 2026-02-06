@@ -6,19 +6,23 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
     const { businessName, addressLine1, addressLine2, phone, gstin } = settings || {};
 
     const subtotal = bill.items.reduce((sum, item) => sum + ((item.price || item.price_at_sale) * (item.count || item.quantity)), 0);
-    const discountValue = bill.discount_value || bill.discountValue || 0;
-    const discountType = bill.discount_type || bill.discountType || 'amount';
-    const taxRate = bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0);
-    const taxAmount = bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0);
 
-    const hasDiscount = discountValue > 0;
-    const hasTax = taxRate > 0;
+    // Totals
+    const finalDiscount = bill.finalDiscount !== undefined ? bill.finalDiscount : (bill.discount_value || bill.discountValue || 0);
+    const finalTax = bill.finalTax !== undefined ? bill.finalTax : (bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0));
+
+    // Global Settings (for fallback/display)
+    const globalDiscountVal = bill.discount_value || bill.discountValue || 0;
+    const globalDiscountType = bill.discount_type || bill.discountType || 'amount';
+    const globalTaxRate = bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0);
+
+    const isItemized = bill.calculationMode === 'itemized';
 
     const customerName = bill.customer?.name || bill.customer_name || 'Walk-in';
     const customerPhone = bill.customer?.phone || bill.customer_phone || '';
     const sellerName = bill.customer?.seller_name || bill.seller_name || bill.employee_name || 'Staff';
 
-    // Normalize payment details (handle both DB snake_case and local object structure)
+    // Normalize payment details
     const paymentModeStr = (typeof bill.paymentMode === 'object' ? bill.paymentMode.mode : bill.payment_mode || bill.paymentMode) || 'Cash';
     const paymentStatus = bill.payment_status || (bill.paymentMode && bill.paymentMode.status) || 'Paid';
     const amountPaid = bill.amount_paid !== undefined ? bill.amount_paid : (bill.paymentMode && bill.paymentMode.amountPaid) || 0;
@@ -52,23 +56,87 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
             <table className="w-full text-left mb-2 border-collapse">
                 <thead>
                     <tr className="border-b border-black">
-                        <th className="py-1 text-[10px] uppercase font-bold text-left w-[35%]">Item</th>
-                        <th className="py-1 text-[10px] uppercase font-bold text-center w-[20%]">Batch</th>
+                        <th className="py-1 text-[10px] uppercase font-bold text-left w-[30%]">Item</th>
+                        <th className="py-1 text-[10px] uppercase font-bold text-center w-[15%]">Batch</th>
                         <th className="py-1 text-center text-[10px] uppercase font-bold w-[10%]">Q</th>
                         <th className="py-1 text-right text-[10px] uppercase font-bold w-[15%]">Rate</th>
-                        <th className="py-1 text-right text-[10px] uppercase font-bold w-[20%]">Amt</th>
+                        {isItemized ? (
+                            <>
+                                <th className="py-1 text-center text-[8px] uppercase font-bold w-[10%]">Disc</th>
+                                <th className="py-1 text-center text-[8px] uppercase font-bold w-[10%]">GST</th>
+                            </>
+                        ) : null}
+                        <th className={`py-1 text-right text-[10px] uppercase font-bold ${isItemized ? 'w-[10%]' : 'w-[20%]'}`}>Amt</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {bill.items.map((item, idx) => (
-                        <tr key={idx} className="border-b border-gray-300 border-dashed">
-                            <td className="py-1 text-[10px] break-words pr-1 align-top">{item.name || item.product_name}</td>
-                            <td className="py-1 text-center text-[9px] font-mono align-top">{item.batch_number || item.batchNumber || '-'}</td>
-                            <td className="py-1 text-center text-[10px] align-top">{item.count || item.quantity}</td>
-                            <td className="py-1 text-right text-[10px] align-top">{parseFloat(item.price || item.price_at_sale).toFixed(0)}</td>
-                            <td className="py-1 text-right text-[10px] font-bold align-top">{((item.price || item.price_at_sale) * (item.count || item.quantity)).toFixed(0)}</td>
-                        </tr>
-                    ))}
+                    {bill.items.map((item, idx) => {
+                        const basePrice = (item.price || item.price_at_sale) * (item.count || item.quantity);
+
+                        // Determine what to show for Tax/Disc
+                        let displayTaxRate = 0;
+                        let displayDisc = null;
+
+                        let finalItemAmount = basePrice;
+
+                        if (isItemized) {
+                            displayTaxRate = item.taxRate || 0;
+                            if (item.discountValue > 0) {
+                                displayDisc = item.discountType === 'percent' ? `${item.discountValue}%` : `₹${item.discountValue}`;
+
+                                // Calculate Discount Amount
+                                const discountAmount = item.discountType === 'percent'
+                                    ? basePrice * (parseFloat(item.discountValue) / 100)
+                                    : parseFloat(item.discountValue);
+
+                                finalItemAmount = Math.max(0, basePrice - discountAmount);
+                            }
+
+                            // Calculate Tax Amount on discounted price
+                            if (displayTaxRate > 0) {
+                                const taxAmount = finalItemAmount * (displayTaxRate / 100);
+                                finalItemAmount += taxAmount;
+                            }
+
+                        } else {
+                            // Global Mode: Show effective rates if they exist
+                            // Amount column stays as Base Price (Price * Qty)
+                            displayTaxRate = globalTaxRate || 0;
+                            if (globalDiscountVal > 0) {
+                                displayDisc = globalDiscountType === 'percent' ? `${globalDiscountVal}%` : `(Global)`;
+                            }
+                        }
+
+                        return (
+                            <tr key={idx} className="border-b border-gray-300 border-dashed">
+                                <td className="py-1 text-[10px] break-words pr-1 align-top">
+                                    {item.name || item.product_name}
+                                    {!isItemized && (displayTaxRate > 0 || displayDisc) && (
+                                        <div className="text-[8px] text-gray-500 flex flex-wrap gap-1">
+                                            {displayTaxRate > 0 && <span>GST: {displayTaxRate}%</span>}
+                                            {displayDisc && <span>Disc: {displayDisc}</span>}
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="py-1 text-center text-[9px] font-mono align-top">{item.batch_number || item.batchNumber || '-'}</td>
+                                <td className="py-1 text-center text-[10px] align-top">{item.count || item.quantity}</td>
+                                <td className="py-1 text-right text-[10px] align-top">{parseFloat(item.price || item.price_at_sale).toFixed(0)}</td>
+
+                                {isItemized && (
+                                    <>
+                                        <td className="py-1 text-center text-[9px] align-top">
+                                            {displayDisc || '-'}
+                                        </td>
+                                        <td className="py-1 text-center text-[9px] align-top">
+                                            {displayTaxRate > 0 ? `${displayTaxRate}%` : '-'}
+                                        </td>
+                                    </>
+                                )}
+
+                                <td className="py-1 text-right text-[10px] font-bold align-top">{finalItemAmount.toFixed(0)}</td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
 
@@ -78,27 +146,22 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
                         <span>Subtotal:</span>
                         <span>₹{subtotal.toFixed(2)}</span>
                     </div>
-                    {hasDiscount && (
+                    {finalDiscount > 0 && (
                         <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
-                            <span>Disc ({discountType === 'percent' ? `${discountValue}%` : '₹'}):</span>
-                            <span>-₹{(subtotal - (bill.total_amount - taxAmount)).toFixed(2)}</span>
+                            <span>Discount:</span>
+                            <span>-₹{parseFloat(finalDiscount).toFixed(2)}</span>
                         </div>
                     )}
 
-                    {/* Tax Breakdown */}
-                    {hasTax && (
+                    {finalTax > 0 && (
                         <>
                             <div className="flex justify-between py-0.5 text-[10px]">
                                 <span>Taxable Amount:</span>
-                                <span>₹{(bill.total_amount - taxAmount).toFixed(2)}</span>
+                                <span>₹{(bill.total_amount - finalTax).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
-                                <span>CGST ({(taxRate / 2).toFixed(1)}%):</span>
-                                <span>₹{(taxAmount / 2).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between py-0.5 text-[10px] text-gray-600">
-                                <span>SGST ({(taxRate / 2).toFixed(1)}%):</span>
-                                <span>₹{(taxAmount / 2).toFixed(2)}</span>
+                                <span>Total GST:</span>
+                                <span>₹{parseFloat(finalTax).toFixed(2)}</span>
                             </div>
                         </>
                     )}
