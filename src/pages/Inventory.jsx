@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Package, AlertCircle, Trash2, Edit2, X, RotateCcw, ArrowUpCircle, Filter, SortAsc } from 'lucide-react';
+import { Plus, Search, Package, AlertCircle, Trash2, Edit2, X, RotateCcw, ArrowUpCircle, Filter, SortAsc, Download, Upload, AlertTriangle, IndianRupee } from 'lucide-react';
 import Dropdown from '../components/Dropdown';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -9,11 +9,11 @@ const Inventory = () => {
     const { addToast } = useToast();
     const [products, setProducts] = useState([]);
     const [showModal, setShowModal] = useState(false);
-    const [showStockModal, setShowStockModal] = useState(false); // New Modal state
-    const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
+    const [showStockModal, setShowStockModal] = useState(false);
+    const [modalMode, setModalMode] = useState('add');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all'); // all, low_stock, out_of_stock
-    const [sortBy, setSortBy] = useState('name'); // name, price_asc, price_desc, quantity_asc, quantity_desc
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [sortBy, setSortBy] = useState('name');
     const [loading, setLoading] = useState(false);
 
     const [currentProduct, setCurrentProduct] = useState({
@@ -22,39 +22,56 @@ const Inventory = () => {
         quantity: '',
         price: '',
         description: '',
-        batchNumber: ''
+        batchNumber: '',
+        unit_cost: '',
+        category_id: '',
+        supplier_id: ''
     });
 
-    const [stockToAdd, setStockToAdd] = useState(''); // State for adding stock
+    const [categories, setCategories] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
+    const [stockToAdd, setStockToAdd] = useState('');
 
     useEffect(() => {
-        loadProducts();
+        loadData();
     }, []);
 
-    const loadProducts = async () => {
+    const loadData = async () => {
         if (window.api) {
             setLoading(true);
             try {
-                const data = await window.api.getProducts();
-                setProducts(data);
+                const [productsData, categoriesData, suppliersData] = await Promise.all([
+                    window.api.getProducts(),
+                    window.api.getCategories(),
+                    window.api.getSuppliers()
+                ]);
+                setProducts(productsData);
+                setCategories(categoriesData);
+                setSuppliers(suppliersData);
             } catch (err) {
                 console.error(err);
-                addToast('Failed to load products', 'error');
+                addToast('Failed to load inventory data', 'error');
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         }
     };
 
     const openCreateModal = () => {
         setModalMode('add');
-        setCurrentProduct({ id: null, name: '', quantity: '', price: '', description: '', batchNumber: '' });
+        setCurrentProduct({ id: null, name: '', quantity: '', price: '', description: '', batchNumber: '', unit_cost: '', category_id: '', supplier_id: '' });
         setShowModal(true);
     };
 
     const openEditModal = (product) => {
         setModalMode('edit');
-        // Map database snake_case to frontend camelCase
-        setCurrentProduct({ ...product, batchNumber: product.batch_number || product.batchNumber || '' });
+        setCurrentProduct({
+            ...product,
+            batchNumber: product.batch_number || '',
+            unit_cost: product.unit_cost || '',
+            category_id: product.category_id || '',
+            supplier_id: product.supplier_id || ''
+        });
         setShowModal(true);
     };
 
@@ -76,7 +93,7 @@ const Inventory = () => {
                 await window.api.updateProduct(currentProduct);
                 addToast('Product updated successfully', 'success');
             }
-            await loadProducts();
+            await loadData();
             setShowModal(false);
         } catch (err) {
             console.error(err);
@@ -97,7 +114,7 @@ const Inventory = () => {
             const newTotal = parseInt(currentProduct.quantity) + qtyToAdd;
             await window.api.updateProductQuantity(currentProduct.id, newTotal);
             addToast(`Stock updated! New Total: ${newTotal}`, 'success');
-            await loadProducts();
+            await loadData();
             setShowStockModal(false);
         } catch (err) {
             console.error(err);
@@ -110,7 +127,7 @@ const Inventory = () => {
             if (window.api) {
                 try {
                     await window.api.deleteProduct(id);
-                    await loadProducts();
+                    await loadData();
                     addToast('Product deleted', 'success');
                 } catch (err) {
                     console.error(err);
@@ -118,6 +135,57 @@ const Inventory = () => {
                 }
             }
         }
+    };
+
+    const handleExport = async () => {
+        try {
+            const data = await window.api.exportInventory();
+            const csvContent = "data:text/csv;charset=utf-8,"
+                + "Name,Quantity,Price,Unit Cost,Batch,Description,Category,Supplier\n"
+                + data.map(p => `${p.name},${p.quantity},${p.price},${p.unit_cost},${p.batch_number || ''},${(p.description || '').replace(/,/g, ' ')},${p.category || ''},${p.supplier || ''}`).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `inventory_export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            addToast('Export successful', 'success');
+        } catch (err) {
+            addToast('Export failed', 'error');
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target.result;
+            const rows = text.split('\n').filter(r => r.trim()).slice(1);
+            const productsToImport = rows.map(row => {
+                const cols = row.split(',');
+                if (cols.length < 3) return null;
+                return {
+                    name: cols[0],
+                    quantity: parseFloat(cols[1]),
+                    price: parseFloat(cols[2]),
+                    unit_cost: parseFloat(cols[3] || 0),
+                    batch_number: cols[4] || '',
+                    description: cols[5] || ''
+                };
+            }).filter(p => p !== null);
+
+            try {
+                await window.api.importInventory(productsToImport);
+                addToast(`Successfully imported ${productsToImport.length} products`, 'success');
+                loadData();
+            } catch (err) {
+                addToast('Import failed', 'error');
+            }
+        };
+        reader.readAsText(file);
     };
 
     const filteredProducts = products.filter(p =>
@@ -148,46 +216,39 @@ const Inventory = () => {
         { label: 'Stock (High to Low)', value: 'quantity_desc' }
     ];
 
+    const stats = {
+        totalProducts: products.length,
+        lowStock: products.filter(p => p.quantity > 0 && p.quantity < 10).length,
+        outOfStock: products.filter(p => p.quantity === 0).length,
+        totalValue: products.reduce((sum, p) => sum + (p.quantity * (p.unit_cost || 0)), 0)
+    };
+
     return (
-        <div className="p-6">
+        <div className="p-6 max-w-[1600px] mx-auto">
+            {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory</h1>
+                    <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Inventory</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and track your product stock levels</p>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-                    {/* Filters & Sort */}
-                    <div className="flex gap-2 z-20">
-                        <Dropdown
-                            options={filterOptions}
-                            value={filterStatus}
-                            onChange={setFilterStatus}
-                            icon={Filter}
-                            label="Filter"
-                        />
-                        <Dropdown
-                            options={sortOptions}
-                            value={sortBy}
-                            onChange={setSortBy}
-                            icon={SortAsc}
-                            label="Sort"
-                        />
-                    </div>
-
-                    <div className="relative flex-1 md:flex-none">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search products..."
-                            className="w-full md:w-64 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-xl focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    {/* Allow Owner AND Workers to Add Product */}
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleExport}
+                        className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-bold transition-all border border-emerald-100 dark:border-emerald-500/20"
+                        title="Export to CSV"
+                    >
+                        <Download size={18} />
+                        <span>Export</span>
+                    </button>
+                    <label className="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 px-4 py-2.5 rounded-2xl flex items-center gap-2 font-bold cursor-pointer transition-all border border-blue-100 dark:border-blue-500/20" title="Import from CSV">
+                        <Upload size={18} />
+                        <span>Import</span>
+                        <input type="file" accept=".csv" className="hidden" onChange={handleImport} />
+                    </label>
                     <button
                         onClick={openCreateModal}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-blue-600/30 font-medium active:scale-95 whitespace-nowrap"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-2xl flex items-center gap-2 font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 whitespace-nowrap"
                     >
                         <Plus size={20} />
                         Add Product
@@ -195,83 +256,167 @@ const Inventory = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+            {/* Stats Cards Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl">
+                            <Package size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Products</p>
+                            <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.totalProducts}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-4 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Low Stock</p>
+                            <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.lowStock}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-2xl">
+                            <X size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Out of Stock</p>
+                            <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.outOfStock}</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            {/* Toolbar Section */}
+            <div className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col md:flex-row gap-4 items-center mb-6">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Search products by name or batch..."
+                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-white pl-12 pr-4 py-3 rounded-2xl focus:border-blue-500 outline-none transition-all focus:ring-4 focus:ring-blue-500/10"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="flex gap-3 w-full md:w-auto z-20">
+                    <Dropdown
+                        options={filterOptions}
+                        value={filterStatus}
+                        onChange={setFilterStatus}
+                        icon={Filter}
+                        label="Status"
+                    />
+                    <Dropdown
+                        options={sortOptions}
+                        value={sortBy}
+                        onChange={setSortBy}
+                        icon={SortAsc}
+                        label="Sort By"
+                    />
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] overflow-hidden shadow-xl shadow-gray-200/50 dark:shadow-none">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
-                                <th className="p-4 font-semibold">Product Name</th>
-                                <th className="p-4 font-semibold">Batch</th>
-                                <th className="p-4 font-semibold">Stock Level</th>
-                                <th className="p-4 font-semibold">Price</th>
-                                <th className="p-4 font-semibold">Description</th>
-                                <th className="p-4 font-semibold text-right">Actions</th>
+                            <tr className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-[0.1em] border-b border-gray-100 dark:border-gray-800">
+                                <th className="p-6 font-black">Product Details</th>
+                                <th className="p-6 font-black">Batch Info</th>
+                                <th className="p-6 font-black">Availability</th>
+                                <th className="p-6 font-black text-emerald-600 dark:text-emerald-400">Unit Cost</th>
+                                <th className="p-6 font-black">Selling Price</th>
+                                <th className="p-6 font-black text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="5" className="p-8 text-center text-gray-500">
-                                        Loading inventory...
+                                    <td colSpan="6" className="p-20 text-center">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                                            <p className="text-gray-400 font-medium">Fetching inventory...</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : filteredProducts.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="p-12 text-center text-gray-500">
-                                        <Package className="mx-auto h-12 w-12 opacity-20 mb-3" />
-                                        <p>No products found matching "{searchTerm}"</p>
+                                    <td colSpan="6" className="p-20 text-center text-gray-400">
+                                        <div className="bg-gray-50 dark:bg-gray-800/50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Package className="opacity-20" size={40} />
+                                        </div>
+                                        <p className="font-bold text-gray-500">No products match your search</p>
+                                        <p className="text-sm opacity-60">Try adjusting your filters or search term</p>
                                     </td>
                                 </tr>
                             ) : filteredProducts.map((product) => (
-                                <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:bg-blue-500/10 group-hover:text-blue-500 transition-colors">
-                                                <Package size={20} />
+                                <tr key={product.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-500/5 transition-colors group">
+                                    <td className="p-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                <Package size={22} />
                                             </div>
-                                            <span className="text-gray-900 dark:text-white font-medium">{product.name}</span>
+                                            <div>
+                                                <span className="text-gray-900 dark:text-white font-bold block text-lg leading-tight mb-1">{product.name}</span>
+                                                <div className="flex items-center gap-2">
+                                                    {product.category && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full uppercase tracking-tighter">{product.category}</span>}
+                                                    {product.supplier && <span className="text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full uppercase tracking-tighter">{product.supplier}</span>}
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-sm font-mono text-gray-600 dark:text-gray-400">
-                                        {product.batch_number || '-'}
+                                    <td className="p-6 font-mono text-sm text-gray-500 dark:text-gray-400">
+                                        <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700">
+                                            {product.batch_number || 'N/A'}
+                                        </span>
                                     </td>
-                                    <td className="p-4">
-                                        <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${product.quantity < 10
-                                            ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
-                                            : 'bg-green-50 border-green-200 text-green-600 dark:bg-green-500/10 dark:border-green-500/20 dark:text-green-400'
-                                            }`}>
-                                            {product.quantity < 10 && <AlertCircle size={12} className="mr-1.5" />}
-                                            {product.quantity} Units
+                                    <td className="p-6">
+                                        <div className={`inline-flex flex-col`}>
+                                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl text-sm font-bold border ${product.quantity < 10
+                                                ? 'bg-red-50 border-red-100 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
+                                                : 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400'
+                                                }`}>
+                                                <div className={`w-2 h-2 rounded-full animate-pulse ${product.quantity < 10 ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                                                {product.quantity} Units
+                                            </div>
+                                            {product.quantity < 10 && (
+                                                <span className="text-[10px] font-bold text-red-500 mt-1 ml-1 uppercase">{product.quantity === 0 ? 'Out of Stock' : 'Low Stock Warning'}</span>
+                                            )}
                                         </div>
                                     </td>
-                                    <td className="p-4 text-gray-900 dark:text-white font-medium">₹{product.price.toFixed(2)}</td>
-                                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm max-w-xs truncate">{product.description || '-'}</td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {/* Add Stock Button - Visible to Everyone */}
+                                    <td className="p-6 font-bold text-emerald-600 dark:text-emerald-400 text-lg">₹{(product.unit_cost || 0).toFixed(2)}</td>
+                                    <td className="p-6 text-gray-900 dark:text-white font-black text-lg">₹{product.price.toFixed(2)}</td>
+                                    <td className="p-6 text-right">
+                                        <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={() => openAddStockModal(product)}
-                                                className="text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors p-2 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg"
-                                                title="Add Stock"
+                                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-xl transition-all"
+                                                title="Quick Stock Update"
                                             >
-                                                <ArrowUpCircle size={18} />
+                                                <Plus size={20} />
                                             </button>
-
-                                            {/* Edit Button - Visible to Everyone */}
                                             <button
                                                 onClick={() => openEditModal(product)}
-                                                className="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg"
-                                                title="Edit Product"
+                                                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl transition-all"
+                                                title="Edit Details"
                                             >
                                                 <Edit2 size={18} />
                                             </button>
-
-                                            {/* Delete Button - OWNER ONLY */}
                                             {user?.role === 'owner' && (
                                                 <button
                                                     onClick={() => handleDelete(product.id, product.name)}
-                                                    className="text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-2 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
-                                                    title="Delete Product"
+                                                    className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
+                                                    title="Remove Product"
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -285,151 +430,154 @@ const Inventory = () => {
                 </div>
             </div>
 
-            {/* Add/Edit Product Modal */}
-            {
-                showModal && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{modalMode === 'add' ? 'Add New Product' : 'Edit Product'}</h2>
-                                <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
-                                    <X size={20} />
-                                </button>
+            {/* Modals */}
+            {showModal && (
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 border border-white/20">
+                        <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center bg-gray-50/30 dark:bg-gray-800/30">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{modalMode === 'add' ? 'Add New Product' : 'Edit Product'}</h2>
+                                <p className="text-sm text-gray-500 mt-1 font-medium">Please fill in all the details below</p>
                             </div>
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Product Name</label>
+                            <button onClick={() => setShowModal(false)} className="p-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-400 hover:text-red-500 rounded-2xl transition-all">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="p-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="md:col-span-2">
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Product Name</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. 5W-30 Synthetic Oil"
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold"
                                         value={currentProduct.name}
                                         onChange={(e) => setCurrentProduct({ ...currentProduct, name: e.target.value })}
+                                        placeholder="e.g. Engine Oil 5W-30"
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Batch Number</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. BATCH-001"
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                                        value={currentProduct.batchNumber || ''}
-                                        onChange={(e) => setCurrentProduct({ ...currentProduct, batchNumber: e.target.value })}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Quantity</label>
-                                        <input
-                                            type="number"
-                                            placeholder="0"
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                                            value={currentProduct.quantity}
-                                            onChange={(e) => setCurrentProduct({ ...currentProduct, quantity: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Price (₹)</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            placeholder="0.00"
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                                            value={currentProduct.price}
-                                            onChange={(e) => setCurrentProduct({ ...currentProduct, price: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Description</label>
-                                    <textarea
-                                        placeholder="Optional product details..."
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none h-24 resize-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                                        value={currentProduct.description}
-                                        onChange={(e) => setCurrentProduct({ ...currentProduct, description: e.target.value })}
-                                    />
-                                </div>
-                                <div className="flex justify-end gap-3 mt-8">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowModal(false)}
-                                        className="px-5 py-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors font-medium"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-900/40 active:scale-95"
-                                    >
-                                        {modalMode === 'add' ? 'Add Product' : 'Save Changes'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Add Stock Modal */}
-            {
-                showStockModal && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Add New Stock</h2>
-                                <button onClick={() => setShowStockModal(false)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <form onSubmit={handleStockSubmit} className="space-y-6">
-                                <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Product</p>
-                                    <p className="font-medium text-gray-900 dark:text-white mb-2">{currentProduct.name}</p>
-                                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                                        <span>Current Stock:</span>
-                                        <span className="font-bold text-gray-900 dark:text-white">{currentProduct.quantity}</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">Units to Add</label>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Initial Quantity</label>
                                     <input
                                         type="number"
-                                        min="1"
-                                        placeholder="Enter quantity"
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-all focus:ring-2 focus:ring-blue-500/20 text-lg font-medium"
-                                        value={stockToAdd}
-                                        onChange={(e) => setStockToAdd(e.target.value)}
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold"
+                                        value={currentProduct.quantity}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, quantity: e.target.value })}
                                         required
-                                        autoFocus
                                     />
                                 </div>
-
-                                <div className="flex justify-end gap-3 pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowStockModal(false)}
-                                        className="px-5 py-2.5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors font-medium"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-emerald-900/40 active:scale-95 flex items-center gap-2"
-                                    >
-                                        <Plus size={18} />
-                                        Add Stock
-                                    </button>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2 text-emerald-600">Selling Price (₹)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full bg-emerald-50/30 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold text-lg"
+                                        value={currentProduct.price}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, price: e.target.value })}
+                                        required
+                                    />
                                 </div>
-                            </form>
-                        </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2 text-blue-600">Unit Cost (₹)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full bg-blue-50/30 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-lg"
+                                        value={currentProduct.unit_cost}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, unit_cost: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Batch Number</label>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-mono"
+                                        value={currentProduct.batchNumber}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, batchNumber: e.target.value })}
+                                        placeholder="BATCH-001"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Category</label>
+                                    <select
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold appearance-none cursor-pointer"
+                                        value={currentProduct.category_id}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, category_id: e.target.value })}
+                                    >
+                                        <option value="">Select Category</option>
+                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Supplier</label>
+                                    <select
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold appearance-none cursor-pointer"
+                                        value={currentProduct.supplier_id}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, supplier_id: e.target.value })}
+                                    >
+                                        <option value="">Select Supplier</option>
+                                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 ml-2">Description / Notes</label>
+                                    <textarea
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-gray-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all h-24 resize-none"
+                                        value={currentProduct.description}
+                                        onChange={(e) => setCurrentProduct({ ...currentProduct, description: e.target.value })}
+                                        placeholder="Add any additional details or specs..."
+                                    ></textarea>
+                                </div>
+                            </div>
+                            <div className="pt-8 flex gap-4">
+                                <button type="button" onClick={() => setShowModal(false)} className="px-8 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-black py-4 rounded-2xl hover:bg-gray-200 transition-all">Cancel</button>
+                                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-500/30 transition-all active:scale-95 text-lg">
+                                    {modalMode === 'add' ? 'Create Product' : 'Apply Changes'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+
+            {showStockModal && (
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-gray-900 rounded-[3rem] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="p-10 text-center bg-blue-600 text-white relative">
+                            <button onClick={() => setShowStockModal(false)} className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-xl transition-all">
+                                <X size={20} />
+                            </button>
+                            <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-lg">
+                                <RotateCcw size={32} className="text-white" />
+                            </div>
+                            <h2 className="text-3xl font-black tracking-tight">Update Stock</h2>
+                            <p className="mt-2 text-blue-100 font-bold opacity-80 uppercase tracking-widest text-xs">{currentProduct.name}</p>
+                        </div>
+                        <form onSubmit={handleStockSubmit} className="p-10">
+                            <div className="mb-8">
+                                <div className="flex justify-between items-end mb-4 px-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Quantity to Add</label>
+                                    <span className="text-xs font-bold text-gray-400">Current: {currentProduct.quantity}</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-[2rem] px-6 py-6 text-4xl font-black text-center text-gray-900 dark:text-white outline-none focus:ring-[12px] focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    value={stockToAdd}
+                                    onChange={(e) => setStockToAdd(e.target.value)}
+                                    placeholder="0"
+                                    autoFocus
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-4">
+                                <button type="button" onClick={() => setShowStockModal(false)} className="px-8 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-black py-4 rounded-2xl hover:bg-gray-200 transition-all">Cancel</button>
+                                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-500/40 transition-all active:scale-95 text-lg">Update Inventory</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
 

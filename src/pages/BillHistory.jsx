@@ -1,24 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, User, Filter, DollarSign, ChevronDown, ChevronUp, FileText, Eye, X, Printer, IndianRupee } from 'lucide-react';
+import { Search, Calendar, User, Filter, DollarSign, ChevronDown, ChevronUp, FileText, Eye, X, Printer, IndianRupee, RotateCcw, AlertCircle } from 'lucide-react';
 import BillTemplate from '../components/BillTemplate';
 import Dropdown from '../components/Dropdown';
-import { BUSINESS_DETAILS } from '../config/business';
 
 const BillHistory = () => {
     const [bills, setBills] = useState([]);
     const [loading, setLoading] = useState(false);
     const [viewBill, setViewBill] = useState(null);
-    const [settings] = useState(BUSINESS_DETAILS);
+    const [settings, setSettings] = useState({});
 
     const [filters, setFilters] = useState({
         startDate: '',
         endDate: '',
-
         minPrice: '',
         maxPrice: '',
         sellerName: '',
         customerName: '',
-        paymentStatus: 'all' // all, paid, unpaid_partial
+        paymentStatus: 'all'
     });
 
     const [expandedBill, setExpandedBill] = useState(null);
@@ -27,15 +25,32 @@ const BillHistory = () => {
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMode, setPaymentMode] = useState('Cash');
 
+    const [showReturnModal, setShowReturnModal] = useState(false);
+    const [returnItem, setReturnItem] = useState(null);
+    const [returnQty, setReturnQty] = useState(1);
+    const [returnReason, setReturnReason] = useState('');
+    const [activeBill, setActiveBill] = useState(null);
+
     useEffect(() => {
         loadBills();
+        loadSettings();
     }, []);
+
+    const loadSettings = async () => {
+        if (window.api) {
+            try {
+                const data = await window.api.getSettings();
+                setSettings(data);
+            } catch (err) {
+                console.error("Failed to load settings", err);
+            }
+        }
+    };
 
     const loadBills = async () => {
         setLoading(true);
         if (window.api) {
             try {
-                // Pass filters to backend
                 const data = await window.api.getBills(filters);
                 setBills(data);
             } catch (err) {
@@ -317,7 +332,22 @@ const BillHistory = () => {
                                                                             {displayDisc && <span className="text-green-600">Disc: {displayDisc}</span>}
                                                                         </div>
                                                                     </div>
-                                                                    <span className="text-gray-900 dark:text-white font-medium">₹{(item.price_at_sale * item.quantity).toFixed(2)}</span>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="text-gray-900 dark:text-white font-medium">₹{(item.price_at_sale * item.quantity).toFixed(2)}</span>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveBill(bill);
+                                                                                setReturnItem(item);
+                                                                                setReturnQty(1);
+                                                                                setReturnReason('');
+                                                                                setShowReturnModal(true);
+                                                                            }}
+                                                                            className="text-orange-500 hover:text-orange-600 p-1 hover:bg-orange-50 dark:hover:bg-orange-950/30 rounded"
+                                                                            title="Return / Refund"
+                                                                        >
+                                                                            <RotateCcw size={14} />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             );
                                                         })}
@@ -325,18 +355,63 @@ const BillHistory = () => {
 
                                                     {/* Bill Summary Section */}
                                                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 mt-4 space-y-1 text-sm">
-                                                        {(bill.discountValue > 0 || bill.discount_value > 0 || bill.finalDiscount > 0) && (
-                                                            <div className="flex justify-between text-gray-500">
-                                                                <span>Discount</span>
-                                                                <span className="text-green-600">-₹{(bill.finalDiscount || bill.discount_value || 0).toFixed(2)}</span>
-                                                            </div>
-                                                        )}
-                                                        {(bill.taxRate > 0 || bill.tax_rate > 0 || bill.finalTax > 0) && (
-                                                            <div className="flex justify-between text-gray-500">
-                                                                <span>Tax (GST)</span>
-                                                                <span className="text-red-600">+₹{(bill.finalTax || bill.tax_amount || 0).toFixed(2)}</span>
-                                                            </div>
-                                                        )}
+                                                        {(() => {
+                                                            const subtotal = bill.items ? bill.items.reduce((sum, item) => sum + (item.price_at_sale * item.quantity), 0) : 0;
+                                                            const isItemized = bill.calculationMode === 'itemized' || bill.calculation_mode === 'itemized';
+
+                                                            let finalDiscountDisplay = 0;
+                                                            let finalTaxDisplay = 0;
+
+                                                            if (isItemized && bill.items) {
+                                                                bill.items.forEach(item => {
+                                                                    const qty = item.quantity || 0;
+                                                                    const price = item.price_at_sale || 0;
+                                                                    const itemTotal = price * qty;
+                                                                    const dVal = parseFloat(item.discountValue !== undefined ? item.discountValue : (item.discount_value !== undefined ? item.discount_value : 0));
+                                                                    const dType = item.discountType || item.discount_type || 'amount';
+                                                                    const itemDisc = dType === 'percent' ? (itemTotal * dVal / 100) : dVal;
+                                                                    finalDiscountDisplay += itemDisc;
+
+                                                                    const tRate = parseFloat(item.taxRate || item.tax_rate || 0);
+                                                                    finalTaxDisplay += (itemTotal - itemDisc) * (tRate / 100);
+                                                                });
+                                                            } else {
+                                                                // Global Mode
+                                                                const savedDiscountAmt = bill.discount_amount !== undefined ? bill.discount_amount : (bill.discountAmount || 0);
+                                                                if (savedDiscountAmt > 0) {
+                                                                    finalDiscountDisplay = parseFloat(savedDiscountAmt);
+                                                                } else {
+                                                                    const dVal = parseFloat(bill.discountValue !== undefined ? bill.discountValue : (bill.discount_value !== undefined ? bill.discount_value : 0));
+                                                                    const dType = bill.discountType || bill.discount_type || 'amount';
+                                                                    finalDiscountDisplay = dType === 'percent' ? (subtotal * dVal / 100) : dVal;
+                                                                }
+
+                                                                const savedTaxAmt = bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0);
+                                                                if (savedTaxAmt > 0) {
+                                                                    finalTaxDisplay = parseFloat(savedTaxAmt);
+                                                                } else {
+                                                                    const tRate = parseFloat(bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0));
+                                                                    finalTaxDisplay = (subtotal - finalDiscountDisplay) * (tRate / 100);
+                                                                }
+                                                            }
+
+                                                            return (
+                                                                <>
+                                                                    {finalDiscountDisplay > 0 && (
+                                                                        <div className="flex justify-between text-gray-500">
+                                                                            <span>Discount</span>
+                                                                            <span className="text-green-600">-₹{finalDiscountDisplay.toFixed(2)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {finalTaxDisplay > 0 && (
+                                                                        <div className="flex justify-between text-gray-500">
+                                                                            <span>Tax (GST)</span>
+                                                                            <span className="text-red-600">+₹{finalTaxDisplay.toFixed(2)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })()}
                                                         <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-gray-700">
                                                             <span>Total Amount</span>
                                                             <span>₹{bill.total_amount.toFixed(2)}</span>
@@ -484,6 +559,85 @@ const BillHistory = () => {
                     </div >
                 )
             }
+
+            {/* Return Item Modal */}
+            {showReturnModal && returnItem && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in text-gray-900 dark:text-white">
+                    <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-8 shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3 text-orange-600">
+                                <RotateCcw size={24} />
+                                <h3 className="text-xl font-black">Process Return</h3>
+                            </div>
+                            <button onClick={() => setShowReturnModal(false)}><X size={20} /></button>
+                        </div>
+
+                        <div className="bg-orange-50 dark:bg-orange-500/10 p-4 rounded-2xl mb-6 border border-orange-100 dark:border-orange-500/20">
+                            <p className="text-sm font-bold text-orange-700 dark:text-orange-400">{returnItem.product_name}</p>
+                            <p className="text-xs text-orange-600/70 mt-1"> Purchased Qty: {returnItem.quantity}</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Return Quantity</label>
+                                <input
+                                    type="number"
+                                    max={returnItem.quantity}
+                                    min={1}
+                                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 font-bold text-lg focus:border-orange-500 outline-none transition-all"
+                                    value={returnQty}
+                                    onChange={(e) => setReturnQty(Math.min(returnItem.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Reason for Return</label>
+                                <textarea
+                                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-sm focus:border-orange-500 outline-none h-24 resize-none transition-all"
+                                    placeholder="Explain why the customer is returning this item..."
+                                    value={returnReason}
+                                    onChange={(e) => setReturnReason(e.target.value)}
+                                />
+                                <div className="flex items-center gap-2 mt-2 text-xs text-orange-600 bg-orange-50 dark:bg-orange-500/5 p-2 rounded-lg">
+                                    <AlertCircle size={14} />
+                                    Refund Amount: ₹{(returnItem.price_at_sale * returnQty).toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+                                <button
+                                    onClick={() => setShowReturnModal(false)}
+                                    className="flex-1 py-4 font-bold text-gray-500 hover:text-gray-900 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (window.api) {
+                                            try {
+                                                await window.api.processReturn({
+                                                    bill_id: activeBill.id,
+                                                    product_id: returnItem.product_id,
+                                                    quantity: returnQty,
+                                                    refund_amount: returnItem.price_at_sale * returnQty,
+                                                    reason: returnReason
+                                                });
+                                                loadBills();
+                                                setShowReturnModal(false);
+                                            } catch (err) {
+                                                console.error(err);
+                                            }
+                                        }
+                                    }}
+                                    className="flex-[2] bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-2xl shadow-xl shadow-orange-500/30 active:scale-95 transition-all"
+                                >
+                                    Confirm Refund
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

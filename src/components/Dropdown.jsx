@@ -27,17 +27,17 @@ const Dropdown = ({ options, value, onChange, icon: Icon, label }) => {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 py-2.5 px-4 rounded-xl outline-none hover:border-blue-500 focus:border-blue-500 transition-all min-w-[200px] justify-between ${isOpen ? 'ring-2 ring-blue-500/20 border-blue-500' : ''}`}
+                className={`flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300 py-3 px-5 rounded-2xl outline-none hover:border-blue-500 focus:border-blue-500 transition-all min-w-[180px] shadow-sm justify-between ${isOpen ? 'ring-4 ring-blue-500/10 border-blue-500' : ''}`}
             >
-                <div className="flex items-center gap-2 truncate">
-                    {Icon && <Icon size={16} className="text-gray-400" />}
-                    <span className="truncate">{selectedOption ? selectedOption.label : label}</span>
+                <div className="flex items-center gap-3 truncate">
+                    {Icon && <Icon size={18} className="text-gray-400" />}
+                    <span className="truncate font-bold text-sm tracking-tight">{selectedOption ? selectedOption.label : label}</span>
                 </div>
-                <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full mt-2 left-0 w-full min-w-[200px] bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-scale-in py-1">
+                <div className="absolute top-full mt-3 left-0 w-full min-w-[200px] bg-white dark:bg-gray-900 border border-gray-50 dark:border-gray-800 rounded-[1.5rem] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 py-2">
                     {options.map((option) => (
                         <button
                             key={option.value}

@@ -34,6 +34,27 @@ contextBridge.exposeInMainWorld('api', {
     // Settings
     getSettings: () => ipcRenderer.invoke('get-settings'),
     saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+    isSetupComplete: () => ipcRenderer.invoke('is-setup-complete'),
+    completeSetup: (data) => ipcRenderer.invoke('complete-setup', data),
+
+    // Suppliers & Categories
+    getSuppliers: () => ipcRenderer.invoke('get-suppliers'),
+    addSupplier: (s) => ipcRenderer.invoke('add-supplier', s),
+    updateSupplier: (s) => ipcRenderer.invoke('update-supplier', s),
+    deleteSupplier: (id) => ipcRenderer.invoke('delete-supplier', id),
+    getCategories: () => ipcRenderer.invoke('get-categories'),
+    addCategory: (name) => ipcRenderer.invoke('add-category', name),
+    deleteCategory: (id) => ipcRenderer.invoke('delete-category', id),
+
+    // Bulk & Returns
+    exportInventory: () => ipcRenderer.invoke('export-inventory'),
+    importInventory: (products) => ipcRenderer.invoke('import-inventory', products),
+    processReturn: (data) => ipcRenderer.invoke('process-return', data),
+
+    // Financials
+    getCustomerLedger: (id) => ipcRenderer.invoke('get-customer-ledger', id),
+    getSalaryHistory: (id) => ipcRenderer.invoke('get-salary-history', id),
+    paySalary: (data) => ipcRenderer.invoke('pay_salary', data),
 
     print: () => ipcRenderer.invoke('print'),
     savePdf: () => ipcRenderer.invoke('save-pdf'),

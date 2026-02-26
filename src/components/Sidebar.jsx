@@ -2,35 +2,49 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LayoutDashboard, Package, Users, Receipt, LogOut, Shield, Moon, Sun, Monitor, Settings, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Package, Users, Receipt, LogOut, Shield, Moon, Sun, Monitor, Settings, RefreshCw, Truck } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { BUSINESS_DETAILS } from '../config/business';
 
 const Sidebar = () => {
-    const { user, logout } = useAuth();
-    const { theme, setTheme } = useTheme();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { addToast } = useToast();
-    const [updateAvailable, setUpdateAvailable] = useState(false);
+    const { user, logout } = useAuth()
+    const { theme, setTheme } = useTheme()
+    const navigate = useNavigate()
+    const location = useLocation()
+    const { addToast } = useToast()
+    const [updateAvailable, setUpdateAvailable] = useState(false)
+    const [businessName, setBusinessName] = useState('...')
 
     useEffect(() => {
+        loadSettings()
         if (window.api) {
             window.api.onUpdateAvailable(() => {
-                addToast('New update available. Downloading...', 'info');
-            });
+                addToast('New update available. Downloading...', 'info')
+            })
             window.api.onUpdateDownloaded(() => {
-                setUpdateAvailable(true);
-                addToast('Update downloaded. Restart to install.', 'success');
-            });
+                setUpdateAvailable(true)
+                addToast('Update downloaded. Restart to install.', 'success')
+            })
         }
-    }, []);
+    }, [])
+
+    const loadSettings = async () => {
+        if (window.api) {
+            try {
+                const settings = await window.api.getSettings()
+                if (settings && settings.businessName) {
+                    setBusinessName(settings.businessName)
+                }
+            } catch (err) {
+                console.error(err)
+            }
+        }
+    }
 
     const handleRestart = () => {
         if (window.api) {
-            window.api.restartApp();
+            window.api.restartApp()
         }
-    };
+    }
 
     const menuItems = [
         { title: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/' },
@@ -41,6 +55,7 @@ const Sidebar = () => {
 
     if (user?.role === 'owner') {
         menuItems.push({ title: 'Employees', icon: <Users size={20} />, path: '/employees' });
+        menuItems.push({ title: 'Suppliers', icon: <Truck size={20} />, path: '/suppliers' });
         menuItems.push({ title: 'Users', icon: <Shield size={20} />, path: '/users' });
         menuItems.push({ title: 'Settings', icon: <Settings size={20} />, path: '/settings' });
     }
@@ -65,7 +80,7 @@ const Sidebar = () => {
     return (
         <div className="w-64 h-screen flex flex-col transition-colors duration-300 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300">
             <div className="p-6 border-b border-gray-200 dark:border-gray-800">
-                <h1 className="text-xl font-bold tracking-wider text-gray-900 dark:text-white uppercase">{BUSINESS_DETAILS.businessName}</h1>
+                <h1 className="text-xl font-bold tracking-wider text-gray-900 dark:text-white uppercase truncate">{businessName}</h1>
                 <p className="text-xs text-gray-500 mt-1">Inventory Management</p>
             </div>
 

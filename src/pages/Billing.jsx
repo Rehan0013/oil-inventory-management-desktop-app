@@ -3,7 +3,6 @@ import { Printer, X, Search, User, CreditCard, Percent, ShoppingCart, IndianRupe
 import { useToast } from '../context/ToastContext';
 import BillTemplate from '../components/BillTemplate';
 import Dropdown from '../components/Dropdown';
-import { BUSINESS_DETAILS } from '../config/business';
 
 const Billing = () => {
     const { addToast } = useToast();
@@ -41,13 +40,39 @@ const Billing = () => {
     const [currentBillId, setCurrentBillId] = useState(null);
     const [lastBillData, setLastBillData] = useState(null); // For template
     const [showBillModal, setShowBillModal] = useState(false);
-    const [settings] = useState(BUSINESS_DETAILS);
+    const [settings, setSettings] = useState({});
 
     const searchInputRef = useRef(null);
 
     useEffect(() => {
         loadData();
-    }, []);
+        loadSettings();
+        const handleKeyDown = (e) => {
+            if (e.key === 'F1') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+            if (e.key === 'F12') {
+                e.preventDefault();
+                if (cart.length > 0) {
+                    handleCheckout();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [products.length]); // Re-bind if products load or just once
+
+    const loadSettings = async () => {
+        if (window.api) {
+            try {
+                const data = await window.api.getSettings();
+                setSettings(data);
+            } catch (err) {
+                console.error("Failed to load settings", err);
+            }
+        }
+    };
 
     const loadData = async () => {
         if (window.api) {
@@ -312,8 +337,8 @@ const Billing = () => {
             taxRate: parseFloat(globalTaxRate) || 0,
 
             // Computed Totals for Receipt
-            finalDiscount: discount,
-            finalTax: taxAmount
+            discountAmount: discount,
+            taxAmount: taxAmount
         };
 
         if (window.api) {

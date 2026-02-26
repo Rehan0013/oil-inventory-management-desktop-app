@@ -14,6 +14,8 @@ import Employees from './pages/Employees';
 import Users from './pages/Users';
 import BillHistory from './pages/BillHistory';
 import Settings from './pages/Settings';
+import Onboarding from './pages/Onboarding';
+import Suppliers from './pages/Suppliers';
 
 // Protected Route Component
 const PrivateRoute = () => {
@@ -35,14 +37,27 @@ const PrivateRoute = () => {
 
 function App() {
   const [showSplash, setShowSplash] = React.useState(true);
+  const [isSetupNeeded, setIsSetupNeeded] = React.useState(false);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000);
-
-    return () => clearTimeout(timer);
+    checkSetup();
   }, []);
+
+  const checkSetup = async () => {
+    if (window.api) {
+      try {
+        const isComplete = await window.api.isSetupComplete();
+        setIsSetupNeeded(!isComplete);
+      } catch (err) {
+        console.error("Setup check failed", err);
+      }
+    }
+
+    // Minimum splash time
+    setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+  };
 
   if (showSplash) {
     return <LoadingScreen />;
@@ -54,17 +69,21 @@ function App() {
         <ThemeProvider>
           <Router>
             <Routes>
-              <Route path="/login" element={<Login />} />
+              <Route path="/setup" element={<Onboarding />} />
+              <Route path="/login" element={isSetupNeeded ? <Navigate to="/setup" /> : <Login />} />
 
               <Route element={<PrivateRoute />}>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={isSetupNeeded ? <Navigate to="/setup" /> : <Dashboard />} />
                 <Route path="/inventory" element={<Inventory />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/bill-history" element={<BillHistory />} />
                 <Route path="/employees" element={<Employees />} />
                 <Route path="/users" element={<Users />} />
+                <Route path="/suppliers" element={<Suppliers />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
+
+              <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </Router>
         </ThemeProvider>

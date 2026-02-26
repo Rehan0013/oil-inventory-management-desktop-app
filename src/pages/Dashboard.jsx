@@ -8,6 +8,7 @@ const Dashboard = () => {
         products: 0,
         employees: 0,
         totalSales: 0,
+        totalProfit: 0,
         lowStock: 0,
         recentBills: [],
         salesData: []
@@ -25,6 +26,7 @@ const Dashboard = () => {
                     products: data.products,
                     employees: data.employees,
                     totalSales: data.totalRevenue,
+                    totalProfit: data.totalProfit,
                     lowStock: data.lowStock,
                     recentBills: data.recentBills,
                     salesData: data.salesData
@@ -40,6 +42,7 @@ const Dashboard = () => {
         { title: 'Total Employees', value: stats.employees, icon: <Users size={24} />, color: 'bg-purple-600', textColor: 'text-purple-600' },
         { title: 'Low Stock Items', value: stats.lowStock, icon: <AlertTriangle size={24} />, color: 'bg-orange-600', textColor: 'text-orange-600' },
         { title: 'Total Revenue', value: `₹${stats.totalSales.toFixed(2)}`, icon: <IndianRupee size={24} />, color: 'bg-emerald-600', textColor: 'text-emerald-600' },
+        { title: 'Total Profit', value: `₹${stats.totalProfit.toFixed(2)}`, icon: <TrendingUp size={24} />, color: 'bg-blue-600', textColor: 'text-blue-600' },
     ];
 
     return (
@@ -76,12 +79,17 @@ const Dashboard = () => {
                             {stats.salesData.length > 0 ? stats.salesData.map((day, i) => (
                                 <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
                                     <div className="relative w-full flex justify-center">
-                                        <span className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-xs px-2 py-1 rounded transition-opacity whitespace-nowrap z-10">
-                                            ₹{day.amount.toFixed(2)}
-                                        </span>
+                                        <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-xs px-2 py-1 rounded transition-opacity whitespace-nowrap z-10">
+                                            Rev: ₹{day.amount.toFixed(2)}<br />
+                                            Profit: ₹{(day.profit || 0).toFixed(2)}
+                                        </div>
                                         <div
-                                            className="w-full max-w-[40px] bg-blue-500/80 hover:bg-blue-600 rounded-t-lg transition-all"
+                                            className="w-full max-w-[30px] bg-blue-500/80 hover:bg-blue-600 rounded-t-lg transition-all"
                                             style={{ height: `${(day.amount / Math.max(...stats.salesData.map(d => d.amount))) * 200}px` }}
+                                        ></div>
+                                        <div
+                                            className="w-full max-w-[10px] bg-emerald-500/80 hover:bg-emerald-600 rounded-t-lg transition-all"
+                                            style={{ height: `${(day.profit / Math.max(...stats.salesData.map(d => d.amount || 1))) * 200}px` }}
                                         ></div>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-medium rotate-0 truncate w-full text-center">{new Date(day.day).toLocaleDateString('en-US', { weekday: 'short' })}</p>

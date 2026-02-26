@@ -7,16 +7,53 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
 
     const subtotal = bill.items.reduce((sum, item) => sum + ((item.price || item.price_at_sale) * (item.count || item.quantity)), 0);
 
-    // Totals
-    const finalDiscount = bill.finalDiscount !== undefined ? bill.finalDiscount : (bill.discount_value || bill.discountValue || 0);
-    const finalTax = bill.finalTax !== undefined ? bill.finalTax : (bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0));
+    const isItemized = bill.calculationMode === 'itemized' || bill.calculation_mode === 'itemized';
 
-    // Global Settings (for fallback/display)
+    // Calculate aggregated totals
+    let finalDiscountDisplay = 0;
+    let finalTaxDisplay = 0;
+
+    if (isItemized) {
+        bill.items.forEach(item => {
+            const qty = item.count || item.quantity || 0;
+            const price = item.price || item.price_at_sale || 0;
+            const itemTotal = price * qty;
+            const dVal = parseFloat(item.discountValue !== undefined ? item.discountValue : (item.discount_value !== undefined ? item.discount_value : 0));
+            const dType = item.discountType || item.discount_type || 'amount';
+            const itemDisc = dType === 'percent' ? (itemTotal * dVal / 100) : dVal;
+            finalDiscountDisplay += itemDisc;
+
+            const tRate = parseFloat(item.taxRate !== undefined ? item.taxRate : (item.tax_rate !== undefined ? item.tax_rate : 0));
+            finalTaxDisplay += (itemTotal - itemDisc) * (tRate / 100);
+        });
+    } else {
+        // Global Mode
+        const savedDiscountAmt = bill.discount_amount !== undefined ? bill.discount_amount : (bill.discountAmount || 0);
+        if (savedDiscountAmt > 0) {
+            finalDiscountDisplay = parseFloat(savedDiscountAmt);
+        } else {
+            const dVal = parseFloat(bill.discountValue !== undefined ? bill.discountValue : (bill.discount_value !== undefined ? bill.discount_value : 0));
+            const dType = bill.discountType || bill.discount_type || 'amount';
+            finalDiscountDisplay = dType === 'percent' ? (subtotal * dVal / 100) : dVal;
+        }
+
+        // Trust tax_amount if it exists as a saved absolute value, otherwise calculate from rate
+        const savedTaxAmt = bill.tax_amount !== undefined ? bill.tax_amount : (bill.taxAmount || 0);
+        if (savedTaxAmt > 0) {
+            finalTaxDisplay = parseFloat(savedTaxAmt);
+        } else {
+            const tRate = parseFloat(bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0));
+            finalTaxDisplay = (subtotal - finalDiscountDisplay) * (tRate / 100);
+        }
+    }
+
+    const finalDiscount = finalDiscountDisplay;
+    const finalTax = finalTaxDisplay;
+
+    // Global Settings (for fallback/display in table if needed)
     const globalDiscountVal = bill.discount_value || bill.discountValue || 0;
     const globalDiscountType = bill.discount_type || bill.discountType || 'amount';
     const globalTaxRate = bill.tax_rate !== undefined ? bill.tax_rate : (bill.taxRate || 0);
-
-    const isItemized = bill.calculationMode === 'itemized';
 
     const customerName = bill.customer?.name || bill.customer_name || 'Walk-in';
     const customerPhone = bill.customer?.phone || bill.customer_phone || '';
@@ -31,10 +68,10 @@ const BillTemplate = ({ bill, settings, refProp, className }) => {
     return (
         <div ref={refProp} className={`${className || 'hidden print:block'} bg-white text-black w-[79mm] min-h-[100mm] p-2 mx-auto relative flex flex-col font-sans shadow-xl print:shadow-none print:w-full print:h-full text-[10px] leading-tight`}>
             <div className="text-center mb-4">
-                <h1 className="text-xl font-bold uppercase tracking-wide mb-1">{businessName || 'Oilstro'}</h1>
-                <p className="text-[10px] text-gray-800">{addressLine1 || '123 Business Road'}</p>
-                <p className="text-[10px] text-gray-800">{addressLine2 || 'City, State'}</p>
-                <p className="text-[10px] text-gray-800">Ph: {phone || '(555) 123-4567'}</p>
+                <h1 className="text-xl font-bold uppercase tracking-wide mb-1">{businessName || ''}</h1>
+                <p className="text-[10px] text-gray-800">{addressLine1 || ''}</p>
+                <p className="text-[10px] text-gray-800">{addressLine2 || ''}</p>
+                <p className="text-[10px] text-gray-800">{phone ? `Ph: ${phone}` : ''}</p>
                 {gstin && <p className="text-[10px] text-gray-800">GSTIN: {gstin}</p>}
             </div>
 

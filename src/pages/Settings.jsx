@@ -1,10 +1,51 @@
 import { useState, useEffect } from 'react';
-import { Save, Building2, MapPin, Phone, FileText, Lock } from 'lucide-react';
-import { BUSINESS_DETAILS } from '../config/business';
+import { Save, Building2, MapPin, Phone, FileText, Lock, Edit2 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 
 const Settings = () => {
-    // We can keep local state if we want to show values, but they will be read-only
-    const settings = BUSINESS_DETAILS;
+    const { addToast } = useToast();
+    const [settings, setSettings] = useState({
+        businessName: '',
+        addressLine1: '',
+        addressLine2: '',
+        phone: '',
+        gstin: ''
+    });
+    const [isEditing, setIsEditing] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        if (window.api) {
+            try {
+                const data = await window.api.getSettings();
+                setSettings(prev => ({ ...prev, ...data }));
+            } catch (err) {
+                console.error(err);
+                addToast('Failed to load settings', 'error');
+            }
+        }
+    };
+
+    const handleSave = async () => {
+        if (window.api) {
+            setLoading(true);
+            try {
+                await window.api.saveSettings(settings);
+                addToast('Settings updated successfully', 'success');
+                setIsEditing(false);
+                // Force reload to update other components if necessary 
+                // but local state update is enough for this page.
+            } catch (err) {
+                addToast('Failed to save settings', 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
     return (
         <div className="p-6 max-w-4xl mx-auto">
@@ -15,10 +56,13 @@ const Settings = () => {
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <Building2 size={20} /> Business Details
                     </h2>
-                    <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full">
-                        <Lock size={14} />
-                        <span>Managed by Administrator</span>
-                    </div>
+                    <button
+                        onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+                        disabled={loading}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${isEditing ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'}`}
+                    >
+                        {isEditing ? <><Save size={18} /> {loading ? 'Saving...' : 'Save Changes'}</> : <><Edit2 size={18} /> Edit Profile</>}
+                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -27,9 +71,9 @@ const Settings = () => {
                         <input
                             type="text"
                             value={settings.businessName}
-                            readOnly
-                            disabled
-                            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            onChange={(e) => setSettings({ ...settings, businessName: e.target.value })}
+                            readOnly={!isEditing}
+                            className={`w-full rounded-lg px-4 py-3 outline-none transition-all ${isEditing ? 'bg-white dark:bg-gray-950 border-blue-500 ring-4 ring-blue-500/10' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed text-gray-500'}`}
                         />
                     </div>
 
@@ -40,9 +84,9 @@ const Settings = () => {
                         <input
                             type="text"
                             value={settings.addressLine1}
-                            readOnly
-                            disabled
-                            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            onChange={(e) => setSettings({ ...settings, addressLine1: e.target.value })}
+                            readOnly={!isEditing}
+                            className={`w-full rounded-lg px-4 py-3 outline-none transition-all ${isEditing ? 'bg-white dark:bg-gray-950 border-blue-500 ring-4 ring-blue-500/10' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed text-gray-500'}`}
                         />
                     </div>
 
@@ -53,9 +97,9 @@ const Settings = () => {
                         <input
                             type="text"
                             value={settings.addressLine2}
-                            readOnly
-                            disabled
-                            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            onChange={(e) => setSettings({ ...settings, addressLine2: e.target.value })}
+                            readOnly={!isEditing}
+                            className={`w-full rounded-lg px-4 py-3 outline-none transition-all ${isEditing ? 'bg-white dark:bg-gray-950 border-blue-500 ring-4 ring-blue-500/10' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed text-gray-500'}`}
                         />
                     </div>
 
@@ -66,9 +110,9 @@ const Settings = () => {
                         <input
                             type="text"
                             value={settings.phone}
-                            readOnly
-                            disabled
-                            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
+                            readOnly={!isEditing}
+                            className={`w-full rounded-lg px-4 py-3 outline-none transition-all ${isEditing ? 'bg-white dark:bg-gray-950 border-blue-500 ring-4 ring-blue-500/10' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed text-gray-500'}`}
                         />
                     </div>
 
@@ -78,17 +122,31 @@ const Settings = () => {
                         </label>
                         <input
                             type="text"
-                            value={settings.gstin || '-'}
-                            readOnly
-                            disabled
-                            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            value={settings.gstin}
+                            onChange={(e) => setSettings({ ...settings, gstin: e.target.value })}
+                            readOnly={!isEditing}
+                            className={`w-full rounded-lg px-4 py-3 outline-none transition-all ${isEditing ? 'bg-white dark:bg-gray-950 border-blue-500 ring-4 ring-blue-500/10' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed text-gray-500'}`}
                         />
                     </div>
                 </div>
 
-                <div className="mt-6 text-xs text-gray-500 italic text-center">
-                    To update these details, please contact the system administrator.
-                </div>
+                {isEditing && (
+                    <div className="mt-8 flex justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-6">
+                        <button
+                            onClick={() => { setIsEditing(false); loadSettings(); }}
+                            className="px-6 py-2.5 text-gray-500 font-bold hover:text-gray-700"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={loading}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+                        >
+                            {loading ? 'Saving...' : 'Save Settings'}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
